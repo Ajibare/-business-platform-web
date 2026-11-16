@@ -88,6 +88,7 @@ export function ImportWizard({ initialType = 'PRODUCTS' }: ImportWizardProps) {
           type,
           filename: input.file.name,
           content: input.file.content,
+          encoding: input.file.encoding,
           ...(input.mapping && Object.keys(input.mapping).length > 0
             ? { mapping: input.mapping }
             : {}),
@@ -187,7 +188,8 @@ export function ImportWizard({ initialType = 'PRODUCTS' }: ImportWizardProps) {
                 <p className="text-sm text-slate">{schema.data.summary}</p>
                 <div className="flex flex-wrap items-center gap-2">
                   <DownloadTemplateButton type={type} />
-                  <Badge status="neutral">CSV only</Badge>
+                  <DownloadTemplateButton type={type} format="csv" variant="ghost" />
+                  <Badge status="neutral">.xlsx or .csv</Badge>
                   <Badge status="neutral">Up to {schema.data.maxRows} rows</Badge>
                 </div>
 

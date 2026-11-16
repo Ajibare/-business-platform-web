@@ -1,7 +1,9 @@
 'use client';
 
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Package } from 'lucide-react';
+import { Package, X } from 'lucide-react';
 import { apiFetch } from '@/services/api';
 import { Batch } from '@/types/api';
 import { Badge } from '@/components/ui/badge';
@@ -10,9 +12,16 @@ import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export function Batches() {
+  const searchParams = useSearchParams();
+  // Set by the expiry alerts so "open inventory record" lands on that medicine.
+  const productId = searchParams.get('productId') ?? '';
+
   const batches = useQuery<Batch[]>({
-    queryKey: ['pharmacy', 'batches'],
-    queryFn: () => apiFetch<Batch[]>('/pharmacy/batches?limit=100'),
+    queryKey: ['pharmacy', 'batches', productId],
+    queryFn: () =>
+      apiFetch<Batch[]>(
+        `/pharmacy/batches?limit=100${productId ? `&medicineId=${encodeURIComponent(productId)}` : ''}`,
+      ),
   });
 
   return (
@@ -23,12 +32,23 @@ export function Batches() {
       </div>
 
       <Card className="p-6">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
             <Package className="h-5 w-5 text-info" aria-hidden="true" />
             Batches
           </h2>
-          <Badge status="neutral">{batches.data?.length ?? 0} recorded</Badge>
+          <div className="flex items-center gap-2">
+            {productId ? (
+              <Link
+                href="/products/pharmacy/batches"
+                className="inline-flex h-8 items-center gap-1 rounded-md border border-border px-3 text-xs font-medium text-ink hover:bg-background"
+              >
+                <X className="h-3 w-3" aria-hidden="true" />
+                Clear medicine filter
+              </Link>
+            ) : null}
+            <Badge status="neutral">{batches.data?.length ?? 0} recorded</Badge>
+          </div>
         </div>
 
         {batches.isLoading ? (
@@ -52,7 +72,9 @@ export function Batches() {
 
         {batches.data && batches.data.length === 0 ? (
           <p className="mt-4 text-sm text-slate">
-            No batches recorded yet. Create one from the dashboard or a stock receipt.
+            {productId
+              ? 'This medicine has no batches recorded yet.'
+              : 'No batches recorded yet. Create one from the dashboard or a stock receipt.'}
           </p>
         ) : null}
 
@@ -71,7 +93,9 @@ export function Batches() {
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-medium text-ink">{batch.balanceQuantity} {batch.unit}</p>
+                  <p className="text-sm font-medium text-ink">
+                    {batch.balanceQuantity} {batch.unit}
+                  </p>
                   <p className="text-xs text-slate">
                     {batch.unitCost !== null ? `Cost ${batch.unitCost}` : 'No cost recorded'}
                   </p>

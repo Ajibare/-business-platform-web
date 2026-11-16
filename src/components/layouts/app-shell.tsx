@@ -14,13 +14,16 @@ import {
   LayoutDashboard,
   LogOut,
   Package,
+  PackagePlus,
   Pill,
+  Receipt,
   ScanLine,
   Truck,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { NotificationBell } from '@/components/notifications/notification-bell';
+import { ExpiryAlertDialog } from '@/features/pharmacy/expiry-alert-dialog';
 import { cn } from '@/lib/utils';
 import { ROLE_LABELS } from '@/types/auth';
 
@@ -48,6 +51,8 @@ const navGroups: NavGroup[] = [
     label: 'Inventory',
     items: [
       { label: 'Products', href: '/products/pharmacy', icon: Pill },
+      { label: 'Add medicines', href: '/products/pharmacy/add', icon: PackagePlus },
+      { label: 'Record sale', href: '/products/pharmacy/sales', icon: Receipt },
       { label: 'Scan product', href: '/products/pharmacy/scan', icon: ScanLine },
       { label: 'Stock batches', href: '/products/pharmacy/batches', icon: Package },
       { label: 'Stock movements', href: '/products/pharmacy/movements', icon: ArrowLeftRight },
@@ -177,6 +182,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <main className="flex-1 p-4 md:p-6">{children}</main>
         </div>
       </div>
+      <ExpiryAlertDialog />
       {mobileContent}
     </div>
   );

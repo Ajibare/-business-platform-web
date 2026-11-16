@@ -10,6 +10,8 @@ export interface UploadedFile {
   name: string;
   content: string;
   size: number;
+  /** Excel workbooks are sent as base64 because the API accepts JSON bodies. */
+  encoding: 'text' | 'base64';
 }
 
 export interface FileUploadProps {
@@ -20,16 +22,26 @@ export interface FileUploadProps {
   hint?: string;
 }
 
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunkSize = 8192;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary);
+}
+
 /**
- * Drag and drop or click to upload a CSV file. Files are read as text in the
- * browser and validated again on the server; nothing is imported here.
+ * Drag and drop or click to upload a spreadsheet. Files are read in the browser
+ * and validated again on the server; nothing is imported here.
  */
 export function FileUpload({
   onFile,
-  accept = '.csv,text/csv',
+  accept = '.csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   maxBytes = 5_000_000,
   disabled,
-  hint = 'CSV files only. Open the template, fill it in, then save as CSV.',
+  hint = 'Excel (.xlsx) or CSV files. Download the sample template, fill it in, then upload it.',
 }: FileUploadProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -37,8 +49,14 @@ export function FileUpload({
   const [selected, setSelected] = useState<UploadedFile | null>(null);
 
   const readFile = async (file: File) => {
-    if (!/\.csv$/i.test(file.name)) {
-      setError('Only .csv files are supported.');
+    const isExcel = /\.xlsx$/i.test(file.name);
+
+    if (/\.xls$/i.test(file.name)) {
+      setError('Legacy .xls files are not supported. Save the sheet as .xlsx or CSV.');
+      return;
+    }
+    if (!isExcel && !/\.csv$/i.test(file.name)) {
+      setError('Only .xlsx and .csv files are supported.');
       return;
     }
     if (file.size > maxBytes) {
@@ -47,13 +65,19 @@ export function FileUpload({
     }
 
     try {
-      const content = await file.text();
-      const uploaded: UploadedFile = { name: file.name, content, size: file.size };
+      const uploaded: UploadedFile = isExcel
+        ? {
+            name: file.name,
+            content: arrayBufferToBase64(await file.arrayBuffer()),
+            size: file.size,
+            encoding: 'base64',
+          }
+        : { name: file.name, content: await file.text(), size: file.size, encoding: 'text' };
       setSelected(uploaded);
       setError(null);
       onFile(uploaded);
     } catch {
-      setError('The file could not be read. Try saving it again as CSV.');
+      setError('The file could not be read. Try saving it again as .xlsx or CSV.');
     }
   };
 
@@ -88,7 +112,7 @@ export function FileUpload({
       >
         <FileSpreadsheet className="mx-auto h-8 w-8 text-slate" aria-hidden="true" />
         <p className="mt-2 text-sm font-medium text-ink">
-          {selected ? selected.name : 'Drag and drop your CSV file here'}
+          {selected ? selected.name : 'Drag and drop your spreadsheet here'}
         </p>
         <p className="mt-1 text-xs text-slate">{hint}</p>
         <div className="mt-3">
@@ -109,7 +133,7 @@ export function FileUpload({
           accept={accept}
           className="hidden"
           onChange={handleInput}
-          aria-label="Upload CSV file"
+          aria-label="Upload spreadsheet"
         />
       </div>
 

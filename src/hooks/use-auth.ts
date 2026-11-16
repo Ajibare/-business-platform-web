@@ -10,6 +10,7 @@ import {
   storeAccessToken,
 } from '@/services/api';
 import { authApi } from '@/services/auth';
+import { clearSessionHint, hasSessionHint, markSessionActive } from '@/lib/session-hint';
 import type { AuthProfile, AuthResult } from '@/types/auth';
 
 /** Fired after the profile is re-fetched so every mounted hook sees the update. */
@@ -29,8 +30,15 @@ export function readStoredProfile(): AuthProfile | null {
 
 export function storeProfile(profile: AuthProfile | null): void {
   if (typeof window === 'undefined') return;
-  if (profile) window.localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
-  else window.localStorage.removeItem(PROFILE_KEY);
+  if (profile) {
+    window.localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+    // A profile only arrives on a working session, so this keeps the router's
+    // hint alive even when the browser lost the cookie but kept the storage.
+    markSessionActive();
+  } else {
+    window.localStorage.removeItem(PROFILE_KEY);
+    clearSessionHint();
+  }
   window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));
 }
 
@@ -66,10 +74,12 @@ export function useAuth() {
       }
 
       // A returning visitor has no access token (it expired) but still has a
-      // refresh cookie. Only renew when this device was signed in before, so
-      // public pages do not fire a pointless request.
+      // refresh cookie. Renew when this device shows any sign of a session:
+      // a cached profile, or the routing hint the previous page left behind.
+      // The hint matters because it, not local storage, is what `/` and the
+      // protected routes are decided on before this code runs.
       let token = storedToken;
-      if (!token && storedProfile) {
+      if (!token && (storedProfile || hasSessionHint())) {
         token = await renewAccessToken();
         if (!cancelled) setAccessToken(token);
       }

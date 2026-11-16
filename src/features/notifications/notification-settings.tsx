@@ -6,6 +6,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Mail, RotateCcw, Trash2, UserPlus } from 'lucide-react';
 import { apiFetch } from '@/services/api';
 import {
+  DailyReport,
+  DailyReportSendResult,
   NotificationCapabilities,
   NotificationDelivery,
   NotificationPreferences,
@@ -18,7 +20,21 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
-import { formatDateTime } from '@/lib/format';
+import { formatCurrency, formatDateTime } from '@/lib/format';
+
+/** A short list keeps the field usable without turning it into a huge select. */
+const TIMEZONE_SUGGESTIONS = [
+  'Africa/Lagos',
+  'Africa/Accra',
+  'Africa/Nairobi',
+  'Africa/Johannesburg',
+  'Europe/London',
+  'America/New_York',
+  'Asia/Dubai',
+  'Asia/Kolkata',
+];
+
+const DELIVERY_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export function NotificationSettings() {
   const preferences = useQuery<NotificationPreferences>({
@@ -77,6 +93,8 @@ export function NotificationSettings() {
 
       {preferences.data ? <PreferencesForm initial={preferences.data} /> : null}
 
+      <DailySalesReportCard />
+
       <RecipientsCard />
 
       <DeliveriesCard />
@@ -90,8 +108,12 @@ function PreferencesForm({ initial }: { initial: NotificationPreferences }) {
     inAppEnabled: initial.inAppEnabled,
     emailEnabled: initial.emailEnabled,
     expiryRemindersEnabled: initial.expiryRemindersEnabled,
+    saleNotificationsEnabled: initial.saleNotificationsEnabled,
     reminderLeadDays: String(initial.reminderLeadDays),
     reminderIntervalDays: String(initial.reminderIntervalDays),
+    dailyReportEnabled: initial.dailyReportEnabled,
+    dailyReportTime: initial.dailyReportTime,
+    dailyReportTimezone: initial.dailyReportTimezone ?? '',
   });
   const [feedback, setFeedback] = useState<string | null>(null);
 
@@ -103,8 +125,13 @@ function PreferencesForm({ initial }: { initial: NotificationPreferences }) {
           inAppEnabled: form.inAppEnabled,
           emailEnabled: form.emailEnabled,
           expiryRemindersEnabled: form.expiryRemindersEnabled,
+          saleNotificationsEnabled: form.saleNotificationsEnabled,
           reminderLeadDays: Number(form.reminderLeadDays),
           reminderIntervalDays: Number(form.reminderIntervalDays),
+          dailyReportEnabled: form.dailyReportEnabled,
+          dailyReportTime: form.dailyReportTime,
+          // An empty value clears the override so the workspace timezone applies.
+          dailyReportTimezone: form.dailyReportTimezone.trim(),
         }),
       }),
     onSuccess: () => {
@@ -123,6 +150,7 @@ function PreferencesForm({ initial }: { initial: NotificationPreferences }) {
     !Number.isFinite(intervalDays) ||
     intervalDays < 1 ||
     intervalDays > 30;
+  const deliveryTimeInvalid = !DELIVERY_TIME_PATTERN.test(form.dailyReportTime);
 
   return (
     <Card className="p-6">
@@ -131,7 +159,8 @@ function PreferencesForm({ initial }: { initial: NotificationPreferences }) {
         Expiry reminder preferences
       </h2>
       <p className="mt-1 text-sm text-slate">
-        Applies to every batch in this workspace. Changes take effect on the next scheduled scan or
+        Applies to every batch in this workspace. Reminders are sent at 90, 60, 30 and 7 days before
+        expiry and again once a batch has expired. Changes take effect on the next scheduled scan or
         when you run a scan manually.
       </p>
 
@@ -162,6 +191,15 @@ function PreferencesForm({ initial }: { initial: NotificationPreferences }) {
           description="Send reminders to the active recipients configured below."
           checked={form.emailEnabled}
           onCheckedChange={(checked) => setForm((current) => ({ ...current, emailEnabled: checked }))}
+        />
+        <Switch
+          id="sale-notifications"
+          label="Sale notifications"
+          description="Notify the workspace when a sale is recorded or a return is refunded."
+          checked={form.saleNotificationsEnabled}
+          onCheckedChange={(checked) =>
+            setForm((current) => ({ ...current, saleNotificationsEnabled: checked }))
+          }
         />
       </div>
 
@@ -206,9 +244,228 @@ function PreferencesForm({ initial }: { initial: NotificationPreferences }) {
         </Alert>
       ) : null}
 
-      <Button className="mt-4" onClick={() => save.mutate()} disabled={save.isPending || scheduleInvalid}>
+      <div className="mt-6 border-t border-border pt-5">
+        <h3 className="text-sm font-semibold text-ink">Daily sales report</h3>
+        <p className="mt-1 text-xs text-slate">
+          Revenue, refunds and profit are reported separately. A day without sales still produces a
+          report, and each business date is only sent once.
+        </p>
+        <div className="mt-3">
+          <Switch
+            id="daily-report"
+            label="Send the daily summary"
+            description="Email the sales summary to recipients who receive sales reports."
+            checked={form.dailyReportEnabled}
+            onCheckedChange={(checked) =>
+              setForm((current) => ({ ...current, dailyReportEnabled: checked }))
+            }
+          />
+        </div>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <label className="block text-sm">
+            <span className="font-medium text-ink">Delivery time</span>
+            <Input
+              className="mt-1"
+              type="time"
+              value={form.dailyReportTime}
+              aria-invalid={deliveryTimeInvalid ? true : undefined}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, dailyReportTime: event.target.value }))
+              }
+            />
+            <span className="mt-1 block text-xs text-slate">
+              Local time in the reporting timezone. Default 20:00.
+            </span>
+          </label>
+          <label className="block text-sm">
+            <span className="font-medium text-ink">Reporting timezone</span>
+            <Input
+              className="mt-1"
+              value={form.dailyReportTimezone}
+              list="daily-report-timezones"
+              placeholder="Use the workspace timezone"
+              onChange={(event) =>
+                setForm((current) => ({ ...current, dailyReportTimezone: event.target.value }))
+              }
+            />
+            <datalist id="daily-report-timezones">
+              {TIMEZONE_SUGGESTIONS.map((zone) => (
+                <option key={zone} value={zone} />
+              ))}
+            </datalist>
+            <span className="mt-1 block text-xs text-slate">
+              Leave blank to follow the workspace timezone.
+            </span>
+          </label>
+        </div>
+        {deliveryTimeInvalid ? (
+          <Alert tone="warning" className="mt-4">
+            Delivery time must use the 24-hour HH:mm format.
+          </Alert>
+        ) : null}
+      </div>
+
+      <Button
+        className="mt-4"
+        onClick={() => save.mutate()}
+        disabled={save.isPending || scheduleInvalid || deliveryTimeInvalid}
+      >
         {save.isPending ? 'Saving…' : 'Save preferences'}
       </Button>
+    </Card>
+  );
+}
+
+function DailySalesReportCard() {
+  const queryClient = useQueryClient();
+  const [date, setDate] = useState('');
+  const [result, setResult] = useState<DailyReportSendResult | null>(null);
+
+  const report = useQuery<DailyReport>({
+    queryKey: ['notifications', 'daily-report', date],
+    queryFn: () =>
+      apiFetch<DailyReport>(`/notifications/daily-report${date ? `?date=${date}` : ''}`),
+  });
+
+  const sendNow = useMutation({
+    mutationFn: () =>
+      apiFetch<DailyReportSendResult>('/notifications/daily-report/send', {
+        method: 'POST',
+        body: JSON.stringify(date ? { date } : {}),
+      }),
+    onSuccess: (sent) => {
+      setResult(sent);
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    },
+  });
+
+  const summary = report.data?.summary;
+  const currency = report.data?.currency ?? 'NGN';
+  const costMissing = summary?.cogs === null;
+
+  const rows = summary
+    ? [
+        {
+          label: 'Revenue',
+          value: formatCurrency(summary.revenue, currency),
+          hint: 'Completed sales after discounts. Revenue is not profit.',
+        },
+        { label: 'Transactions', value: String(summary.transactions) },
+        { label: 'Units sold', value: String(summary.unitsSold) },
+        { label: 'Gross sales', value: formatCurrency(summary.grossSales, currency) },
+        { label: 'Discounts', value: formatCurrency(summary.discounts, currency) },
+        { label: 'Refunds', value: formatCurrency(summary.refunds, currency) },
+        { label: 'Net sales', value: formatCurrency(summary.netSales, currency) },
+        {
+          label: 'Cost of goods sold',
+          value: formatCurrency(summary.cogs, currency),
+          hint: costMissing ? 'Some sold batches have no purchase cost recorded.' : undefined,
+        },
+        {
+          label: 'Gross profit',
+          value: formatCurrency(summary.grossProfit, currency),
+          hint: costMissing ? 'Not shown while a purchase cost is missing.' : undefined,
+        },
+      ]
+    : [];
+
+  return (
+    <Card className="p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-ink">Daily sales summary</h2>
+          <p className="mt-1 text-sm text-slate">
+            Preview exactly what the scheduled email reports. Revenue, refunds and profit stay
+            separate, and the figures come from completed sales only.
+          </p>
+        </div>
+        {report.data ? (
+          <Badge status={report.data.alreadySent ? 'success' : 'neutral'}>
+            {report.data.alreadySent ? 'Already sent' : 'Not sent yet'}
+          </Badge>
+        ) : null}
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-end gap-2">
+        <label className="block text-sm">
+          <span className="font-medium text-ink">Business date</span>
+          <Input
+            className="mt-1"
+            type="date"
+            value={date}
+            onChange={(event) => {
+              setDate(event.target.value);
+              setResult(null);
+            }}
+          />
+        </label>
+        <Button variant="outline" onClick={() => report.refetch()} disabled={report.isFetching}>
+          <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
+          {report.isFetching ? 'Refreshing…' : 'Refresh'}
+        </Button>
+        <Button
+          onClick={() => sendNow.mutate()}
+          disabled={sendNow.isPending || !report.data}
+        >
+          {sendNow.isPending ? 'Sending…' : 'Send this report now'}
+        </Button>
+      </div>
+
+      {report.error ? (
+        <Alert tone="danger" className="mt-4" title="Unable to build the summary">
+          {report.error instanceof Error ? report.error.message : 'Please try again.'}
+        </Alert>
+      ) : null}
+
+      {sendNow.error ? (
+        <Alert tone="danger" className="mt-4" title="The report was not sent">
+          {sendNow.error instanceof Error ? sendNow.error.message : 'Please try again.'}
+        </Alert>
+      ) : null}
+
+      {result ? (
+        <Alert
+          tone={result.skipped ? 'warning' : 'success'}
+          className="mt-4"
+          title={result.skipped ? 'Nothing was sent' : `Report for ${result.report.date} sent`}
+        >
+          {result.skipped
+            ? result.reason ?? 'This report is not due or was already delivered.'
+            : `${result.emailsQueued} email(s) queued, ${result.emailsSent} delivered, ${result.emailsFailed} failed.`}
+        </Alert>
+      ) : null}
+
+      {report.isLoading ? (
+        <div className="mt-4 space-y-2">
+          {[0, 1, 2].map((index) => (
+            <Skeleton key={index} className="h-10 w-full" />
+          ))}
+        </div>
+      ) : null}
+
+      {report.data && summary ? (
+        <>
+          <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {rows.map((row) => (
+              <div key={row.label} className="rounded-md border border-border p-3">
+                <dt className="text-xs text-slate">{row.label}</dt>
+                <dd className="text-base font-semibold text-ink">{row.value}</dd>
+                {row.hint ? <p className="mt-1 text-xs text-slate">{row.hint}</p> : null}
+              </div>
+            ))}
+          </dl>
+
+          <p className="mt-3 text-xs text-slate">
+            {report.data.pharmacyName} · {report.data.date} · {report.data.timeZone} · delivers at{' '}
+            {report.data.deliveryTime}
+          </p>
+          <p className="mt-1 text-xs text-slate">
+            {report.data.recipients.length === 0
+              ? 'No recipient receives sales reports yet. Add one below and turn on sales reports for it.'
+              : `Recipients: ${report.data.recipients.join(', ')}`}
+          </p>
+        </>
+      ) : null}
     </Card>
   );
 }
@@ -361,7 +618,8 @@ function RecipientsCard() {
                   <p className="text-sm font-medium text-ink">{recipient.name ?? recipient.email}</p>
                   <p className="text-xs text-slate">
                     {recipient.name ? `${recipient.email} · ` : ''}
-                    {recipient.receivesExpiry ? 'Expiry reminders' : 'No expiry reminders'}
+                    {recipient.receivesExpiry ? 'Expiry reminders' : 'No expiry reminders'} ·{' '}
+                    {recipient.receivesSales ? 'daily reports' : 'no daily reports'}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -393,6 +651,19 @@ function RecipientsCard() {
                     disabled={update.isPending}
                   >
                     {recipient.receivesExpiry ? 'Mute expiry' : 'Unmute expiry'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      update.mutate({
+                        id: recipient.id,
+                        body: { receivesSales: !recipient.receivesSales },
+                      })
+                    }
+                    disabled={update.isPending}
+                  >
+                    {recipient.receivesSales ? 'Stop daily reports' : 'Send daily reports'}
                   </Button>
                   <Button
                     variant="ghost"

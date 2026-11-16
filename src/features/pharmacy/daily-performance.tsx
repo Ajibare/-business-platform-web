@@ -18,9 +18,8 @@ const todayKey = () => new Date().toLocaleDateString('en-CA');
 /**
  * Daily performance section for the dashboard.
  *
- * Only operational figures are derived from recorded data. Sales, gain and
- * commission are rendered as explicitly unavailable until the platform records
- * real sales transactions; no estimate is fabricated.
+ * Income comes from recorded sales only. Revenue, net sales and gross profit
+ * are separate figures and revenue is never labelled as profit.
  */
 export function DailyPerformance() {
   const [date, setDate] = useState(todayKey());
@@ -41,8 +40,9 @@ export function DailyPerformance() {
             Daily performance
           </h2>
           <p className="text-sm text-slate">
-            Operational counts for the workspace calendar day
-            {data ? ` (${data.timeZone})` : ''}. Sales, profit and commission need a sales module.
+            Sales, refunds and profit for the workspace calendar day
+            {data ? ` (${data.timeZone})` : ''}. Stock issues are shown separately because an
+            issue is not always a sale.
           </p>
         </div>
         <div className="flex items-end gap-2">
@@ -91,54 +91,80 @@ export function DailyPerformance() {
         <>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <MetricCard
+              label="Sales revenue"
+              value={formatCurrency(data.income.revenue, data.currency)}
+              description="Completed sales after discounts. Revenue is not profit."
+              icon={Coins}
+              status="info"
+              badgeLabel="Revenue"
+            />
+            <MetricCard
+              label="Transactions"
+              value={data.income.transactions}
+              description={`${data.income.unitsSold} unit(s) sold across ${data.sales.products} product(s).`}
+              icon={Receipt}
+              status="info"
+              badgeLabel="Recorded"
+            />
+            <MetricCard
+              label="Net sales"
+              value={formatCurrency(data.income.netSales, data.currency)}
+              description={`Revenue ${formatCurrency(data.income.revenue, data.currency)} less refunds ${formatCurrency(data.income.refunds, data.currency)}.`}
+              icon={TrendingUp}
+              status="neutral"
+              badgeLabel="After refunds"
+            />
+            <MetricCard
+              label="Gross profit"
+              value={
+                data.gain.available
+                  ? formatCurrency(data.gain.amount, data.currency)
+                  : formatCurrency(null, data.currency)
+              }
+              unavailable={!data.gain.available}
+              description={data.gain.reason}
+              icon={TrendingUp}
+              status={data.gain.available ? 'success' : 'neutral'}
+            />
+            <MetricCard
+              label="Cost of goods sold"
+              value={
+                data.income.cogs === null
+                  ? formatCurrency(null, data.currency)
+                  : formatCurrency(data.income.cogs, data.currency)
+              }
+              unavailable={data.income.cogs === null}
+              description={
+                data.income.cogs === null
+                  ? 'Not every sold batch has a recorded purchase cost.'
+                  : 'Recorded purchase cost of the batches sold.'
+              }
+              icon={PackageMinus}
+              status="neutral"
+            />
+            <MetricCard
               label="Stock issues recorded"
               value={data.recordedStockIssues.transactions}
-              description="Stock out (ISSUE) movements recorded on this date."
-              icon={PackageMinus}
-              status="info"
-              badgeLabel="Recorded"
-            />
-            <MetricCard
-              label="Products issued"
-              value={data.recordedStockIssues.products}
-              description="Distinct products with at least one recorded issue."
+              description={`${data.recordedStockIssues.quantity} unit(s) issued across ${data.recordedStockIssues.products} product(s).`}
               icon={Users}
-              status="info"
-              badgeLabel="Recorded"
-            />
-            <MetricCard
-              label="Quantity issued"
-              value={data.recordedStockIssues.quantity.toLocaleString()}
-              description="Total units issued across all batches."
-              icon={TrendingUp}
-              status="info"
-              badgeLabel="Recorded"
+              status="neutral"
+              badgeLabel="Operational"
             />
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <MetricCard
-              label="Sales today"
-              value={formatCurrency(null, data.currency)}
-              unavailable
-              description={data.sales.reason}
+              label="Gross sales"
+              value={formatCurrency(data.income.grossSales, data.currency)}
+              description="Value of goods sold before discounts."
               icon={Coins}
               status="neutral"
             />
             <MetricCard
-              label="Transactions"
-              value="—"
-              unavailable
-              description="Sales transactions are not recorded by the platform yet."
+              label="Discounts"
+              value={formatCurrency(data.income.discounts, data.currency)}
+              description="Discount given on completed sales."
               icon={Receipt}
-              status="neutral"
-            />
-            <MetricCard
-              label="Gain / profit"
-              value={formatCurrency(null, data.currency)}
-              unavailable
-              description={data.gain.reason}
-              icon={TrendingUp}
               status="neutral"
             />
             <MetricCard

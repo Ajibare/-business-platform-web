@@ -9,18 +9,56 @@ the `business-platform-api` repository (`docs/AUTH_*.md`,
 
 | Route | File | Notes |
 | --- | --- | --- |
-| `/sign-in` | `src/app/(auth)/sign-in/page.tsx` | Wrapped in `Suspense` because the form reads `?next=` |
+| `/` | `src/app/page.tsx` | Redirected by middleware: `/sign-up` without a session, `/dashboard` with one |
 | `/sign-up` | `src/app/(auth)/sign-up/page.tsx` | Two steps on one page |
+| `/verify-contact` | `src/app/(auth)/verify-contact/page.tsx` | Finishes a registration from a cold start: email plus code |
+| `/sign-in` | `src/app/(auth)/sign-in/page.tsx` | Wrapped in `Suspense` because the form reads `?next=` |
 | `/forgot-password` | `src/app/(auth)/forgot-password/page.tsx` | |
 | `/reset-password?token=…` | `src/app/(auth)/reset-password/page.tsx` | Server component reads `searchParams`, then renders the form |
 | `/invite/[token]` | `src/app/(auth)/invite/[token]/page.tsx` | Public: shows the workspace and role before sign-in |
 | `/onboarding/pharmacy-setup` | `src/app/onboarding/pharmacy-setup/page.tsx` | Under the onboarding layout, which allows an unfinished setup |
-| `/login` | `src/app/(auth)/login/page.tsx` | Redirects to `/sign-in` |
+| `/login` | `src/app/(auth)/login/page.tsx` | Redirects to `/sign-in`, or to the dashboard when signed in |
 | `/dashboard` | `src/app/(platform)/dashboard/page.tsx` | Shows the setup checklist while tasks remain |
 
 All `(auth)` routes share `AuthLayout`: a brand panel and a form column, stacked on
 small screens. Every page sets `robots: { index: false }` except the public
 invitation preview, which lives behind the same layout.
+
+## Routing and redirects
+
+Two layers, each answering a different question.
+
+`src/middleware.ts` runs before anything is rendered, so it answers "may this
+browser open a page at all?". It reads one cookie, `psi_session`, written by the
+client whenever a session arrives (`lib/session-hint.ts`). It cannot validate a
+session: the refresh token is an HttpOnly cookie scoped to `/api/v1/auth` and
+never reaches this origin. The hint therefore decides routing only — it grants
+no access, and a forged value costs a trip to `/sign-in` at worst.
+
+`AuthGuard` answers "is this session real, and where does this person belong?"
+after `/auth/me` or a refresh has answered. Its rules are authoritative.
+
+| Request | No hint | Hint present |
+| --- | --- | --- |
+| `/` | 307 to `/sign-up` | 307 to `/dashboard` |
+| `/login` | 307 to `/sign-in` | 307 to `/dashboard` |
+| `/sign-up`, `/sign-in`, `/verify-contact`, `/forgot-password`, `/reset-password` | render | render |
+| `/invite/<token>` | render | render |
+| Anything else | 307 to `/sign-in?next=<path>` | render; `AuthGuard` decides |
+
+Rules that keep it loop-free:
+
+- Authentication pages are never redirected *away* from, even with a hint. A
+  stale hint must not fight the guard's redirect back to sign-in.
+- `next` always carries a same-origin path, query string included; the sign-in
+  form rejects anything else.
+- The hint is cleared on sign-out, on a refused renewal, and whenever a session
+  ends, so the next hard navigation already sees the truth.
+- Everything not on the public list is protected, so a new screen is private by
+  default rather than public by accident.
+
+The rules live in `lib/route-guard.ts` and are tested in `lib/route-guard.test.ts`
+without the edge runtime.
 
 ## Components
 
@@ -80,7 +118,8 @@ If a rule changes, change both repositories and their tests together.
 | State | Result |
 | --- | --- |
 | `isLoading` | Skeletons; children are not rendered |
-| No access token | `router.replace('/sign-in?next=<encoded pathname>')`, nothing rendered |
+| Deactivated account, or a membership that is no longer active | Signs out and replaces to `/sign-in` |
+| No access token | `router.replace('/sign-in?next=<encoded pathname and query>')`, nothing rendered |
 | Owner with `onboarding.requiresSetup` | `router.replace('/onboarding/pharmacy-setup')` |
 | Non-Owner with `requiresSetup` | Renders children (staff go to the dashboard) |
 | Otherwise | Renders children |

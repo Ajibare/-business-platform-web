@@ -1,3 +1,6 @@
+import { clearSessionHint, markSessionActive } from '@/lib/session-hint';
+import { clearExpiryAlertHints } from '@/lib/expiry-popup';
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 const API_ROOT = `${API_BASE_URL}/api/v1`;
 
@@ -58,14 +61,24 @@ function readAccessToken(): string | null {
 
 export function storeAccessToken(token: string | null): void {
   if (typeof window === 'undefined') return;
-  if (token) window.localStorage.setItem(ACCESS_TOKEN_KEY, token);
-  else window.localStorage.removeItem(ACCESS_TOKEN_KEY);
+  if (token) {
+    window.localStorage.setItem(ACCESS_TOKEN_KEY, token);
+    // The router needs to know a session exists before any JavaScript runs, so
+    // the hint is written whenever a token is.
+    markSessionActive();
+  } else {
+    window.localStorage.removeItem(ACCESS_TOKEN_KEY);
+    clearSessionHint();
+  }
 }
 
 export function clearStoredSession(): void {
   if (typeof window === 'undefined') return;
   window.localStorage.removeItem(ACCESS_TOKEN_KEY);
   window.localStorage.removeItem(PROFILE_KEY);
+  clearSessionHint();
+  // A new sign-in should show the expiry alert again.
+  clearExpiryAlertHints();
 }
 
 /**
@@ -198,5 +211,7 @@ export async function apiFetchFile(path: string): Promise<ApiFile> {
 export interface ApiFile {
   filename: string;
   contentType: string;
+  /** CSV text, or base64 when `encoding` is `base64`. */
   content: string;
+  encoding?: 'text' | 'base64';
 }

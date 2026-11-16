@@ -13,8 +13,10 @@ Next.js, React, TypeScript, Tailwind CSS, React Hook Form, Zod, TanStack Query.
 
 ## Routes
 
-- `(auth)/login`
+- `/` redirects to `/sign-up` or `/dashboard`; see `docs/ROUTING_AND_NAVIGATION.md`
+- `(auth)/sign-up`, `sign-in`, `verify-contact`, `forgot-password`, `reset-password`, `invite/[token]`
 - `(platform)/dashboard`
+- `onboarding/pharmacy-setup`
 - `products/pharmacy`
 
 ## Testing
