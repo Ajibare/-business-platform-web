@@ -5,19 +5,24 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   ArrowLeftRight,
+  Bell,
   Building2,
   CalendarClock,
   ChartNoAxesCombined,
   ClipboardCheck,
+  FileSpreadsheet,
   LayoutDashboard,
   LogOut,
   Package,
   Pill,
+  ScanLine,
   Truck,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
+import { NotificationBell } from '@/components/notifications/notification-bell';
 import { cn } from '@/lib/utils';
+import { ROLE_LABELS } from '@/types/auth';
 
 interface NavItem {
   label: string;
@@ -36,17 +41,20 @@ const navGroups: NavGroup[] = [
     items: [
       { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
       { label: 'Expiry monitoring', href: '/products/pharmacy/expiry', icon: CalendarClock },
+      { label: 'Notifications', href: '/notifications', icon: Bell },
     ],
   },
   {
     label: 'Inventory',
     items: [
       { label: 'Products', href: '/products/pharmacy', icon: Pill },
+      { label: 'Scan product', href: '/products/pharmacy/scan', icon: ScanLine },
       { label: 'Stock batches', href: '/products/pharmacy/batches', icon: Package },
       { label: 'Stock movements', href: '/products/pharmacy/movements', icon: ArrowLeftRight },
       { label: 'Stock receipts', href: '/products/pharmacy/receipts', icon: Truck },
       { label: 'Suppliers', href: '/products/pharmacy/suppliers', icon: Building2 },
       { label: 'Stock counts', href: '/products/pharmacy/counts', icon: ClipboardCheck },
+      { label: 'Bulk import', href: '/products/pharmacy/import', icon: FileSpreadsheet },
     ],
   },
   {
@@ -60,22 +68,37 @@ const navGroups: NavGroup[] = [
 const mobileNavItems = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Products', href: '/products/pharmacy', icon: Pill },
-  { label: 'Stock batches', href: '/products/pharmacy/batches', icon: Package },
+  { label: 'Scan', href: '/products/pharmacy/scan', icon: ScanLine },
   { label: 'Expiry', href: '/products/pharmacy/expiry', icon: CalendarClock },
+  { label: 'Alerts', href: '/notifications', icon: Bell },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { signOut } = useAuth();
+  const { signOut, profile } = useAuth();
+
+  const workspaceName = profile?.organisation.name ?? 'Pharmacy workspace';
+  const roleLabel = profile ? ROLE_LABELS[profile.membership.role] : null;
 
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(`${href}/`);
 
+  const handleSignOut = async () => {
+    await signOut();
+    router.push('/sign-in');
+  };
+
   const sidebarContent = (
     <div className="flex h-full flex-col">
       <div className="border-b border-border p-4">
-        <p className="text-sm font-semibold text-ink">Pharmacy workspace</p>
+        <p className="truncate text-sm font-semibold text-ink" title={workspaceName}>
+          {workspaceName}
+        </p>
+        <p className="text-xs text-slate">
+          {roleLabel ?? 'Pharmacy workspace'}
+          {profile?.user.email ? ` · ${profile.user.email}` : ''}
+        </p>
       </div>
       <nav className="flex-1 overflow-y-auto p-4">
         {navGroups.map((group) => (
@@ -137,15 +160,13 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="flex min-h-screen flex-1 flex-col">
           <header className="sticky top-0 z-40 border-b bg-surface">
             <div className="flex h-16 items-center justify-between px-4 md:px-6">
-              <p className="text-sm font-semibold text-ink">Pharmacy workspace</p>
+              <p className="truncate text-sm font-semibold text-ink">{workspaceName}</p>
               <div className="flex items-center gap-2">
+                <NotificationBell />
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => {
-                    signOut();
-                    router.push('/login');
-                  }}
+                  onClick={() => void handleSignOut()}
                 >
                   <LogOut className="mr-2 h-4 w-4" aria-hidden="true" />
                   Sign out

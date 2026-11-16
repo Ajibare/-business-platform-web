@@ -35,7 +35,22 @@ const config: Config = {
           soft: '#E9EDF0',
         },
         ink: '#14212B',
-        slate: '#475569',
+        // `text-slate` stays the readable body colour; the numbered steps were
+        // missing, so `bg-slate-100` (used for hover and skeletons) compiled to
+        // nothing. They are added back here without changing the default.
+        slate: {
+          50: '#F8FAFC',
+          100: '#F1F5F9',
+          200: '#E2E8F0',
+          300: '#CBD5E1',
+          400: '#94A3B8',
+          500: '#64748B',
+          600: '#475569',
+          700: '#334155',
+          800: '#1E293B',
+          900: '#0F172A',
+          DEFAULT: '#475569',
+        },
         border: '#CBD5DC',
         background: '#F5F7FA',
         surface: '#FFFFFF',

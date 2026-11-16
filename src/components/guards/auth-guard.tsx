@@ -1,19 +1,40 @@
 'use client';
 
 import { ReactNode, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { Skeleton } from '@/components/ui/skeleton';
 
-export function AuthGuard({ children }: { children: ReactNode }) {
+interface AuthGuardProps {
+  children: ReactNode;
+  /**
+   * The platform shell requires a completed setup, so an Owner who has not
+   * finished the wizard is sent back to it instead of seeing an empty
+   * dashboard. The onboarding layout passes `false`.
+   */
+  requireOnboardingComplete?: boolean;
+}
+
+export function AuthGuard({ children, requireOnboardingComplete = true }: AuthGuardProps) {
   const router = useRouter();
-  const { accessToken, isLoading } = useAuth();
+  const pathname = usePathname();
+  const { accessToken, profile, role, isLoading } = useAuth();
+  // Only the Owner can run the setup wizard; invited staff land on the dashboard.
+  const needsSetup = Boolean(requireOnboardingComplete && profile?.onboarding.requiresSetup && role === 'OWNER');
 
   useEffect(() => {
-    if (!isLoading && !accessToken) {
-      router.replace('/login');
+    if (isLoading) return;
+
+    if (!accessToken) {
+      const next = pathname ? `?next=${encodeURIComponent(pathname)}` : '';
+      router.replace(`/sign-in${next}`);
+      return;
     }
-  }, [isLoading, accessToken, router]);
+
+    if (needsSetup) {
+      router.replace('/onboarding/pharmacy-setup');
+    }
+  }, [isLoading, accessToken, needsSetup, pathname, router]);
 
   if (isLoading) {
     return (
@@ -27,6 +48,10 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   }
 
   if (!accessToken) {
+    return null;
+  }
+
+  if (needsSetup) {
     return null;
   }
 

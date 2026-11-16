@@ -1,13 +1,9 @@
-import { AuthLayout } from '@/components/layouts/auth-layout';
-import { LoginForm } from '@/features/auth/login-form';
+import { redirect } from 'next/navigation';
 
-export default function LoginPage() {
-  return (
-    <AuthLayout>
-      <div className="space-y-4">
-        <h1 className="text-2xl font-semibold text-ink">Sign in</h1>
-        <LoginForm />
-      </div>
-    </AuthLayout>
-  );
+/**
+ * The sign-in route moved to `/sign-in`. This keeps every existing bookmark and
+ * link working instead of showing a 404.
+ */
+export default function LegacyLoginPage() {
+  redirect('/sign-in');
 }

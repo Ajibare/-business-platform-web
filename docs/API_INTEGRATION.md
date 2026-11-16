@@ -6,15 +6,22 @@
 
 ## Client
 
-Central API client in `src/services/api.ts` handles auth headers, error envelopes and response unwrapping.
+Central API client in `src/services/api.ts`.
 
-- Attaches `Authorization: Bearer <accessToken>` from `localStorage` on every request.
+- Attaches `Authorization: Bearer <accessToken>` from `localStorage` on every request that is not `anonymous`.
+- On a `401`, renews the access token once through `POST /api/v1/auth/refresh` and retries the request. Concurrent failures share a single refresh call, because the API treats a second use of the same refresh token as a stolen cookie and ends every session.
 - Unwraps `{ data: T }` success envelopes.
-- Throws `ApiError` carrying the backend `code` and HTTP `statusCode`.
+- Throws `ApiError` carrying the backend `code`, `statusCode`, `field`, `details` and `retryAfterSeconds`, so a form can put a message on the right input and can show a wait.
+- Fires `psi:session-expired` when the session cannot be renewed; `useAuth` listens and clears its state.
 
 ## Auth
 
-The login feature calls `POST /api/v1/auth/login` through the central client and stores tokens.
+`src/services/auth.ts` groups the calls: `authApi`, `invitationApi`, `onboardingApi`. The access token lives in `localStorage` (`accessToken`); the refresh token is an HttpOnly cookie the client never sees. The cached profile lives under `authProfile` so the shell can render before `/auth/me` answers.
+
+The flow and the error codes are documented in the API repository:
+`docs/AUTH_API_CONTRACTS.md`, `docs/SESSION_AND_SECURITY.md` and
+`docs/AUTHENTICATION_ARCHITECTURE.md`. UI routes and components:
+`docs/AUTH_UI.md` in this repository.
 
 ## Pharmacy endpoints
 
@@ -23,4 +30,6 @@ The login feature calls `POST /api/v1/auth/login` through the central client and
 
 ## Types
 
-API contracts are generated from OpenAPI or maintained in `src/types/api.ts`.
+No OpenAPI document is published. `src/types/api.ts` holds the product module
+contracts and `src/types/auth.ts` mirrors the auth contracts by hand; when a shape
+changes in the API, both are updated together.
