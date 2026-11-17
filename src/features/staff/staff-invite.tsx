@@ -16,6 +16,7 @@ import { SectionLoader } from '@/components/ui/loading';
 import { toast } from '@/components/ui/toast';
 import { usePermissions } from '@/hooks/use-permissions';
 import { ApiError } from '@/services/api';
+import { userMessageFor } from '@/lib/api-errors';
 import { invitationApi } from '@/services/auth';
 import { branchApi } from '@/services/platform';
 import { ROLE_LABELS, STAFF_ROLES, type InvitableRole, type StaffInvitation } from '@/types/auth';
@@ -87,11 +88,12 @@ export function StaffInvite() {
       setBranchIds([]);
       await queryClient.invalidateQueries({ queryKey: ['invitations'] });
     } catch (error) {
-      if (error instanceof ApiError) {
-        if (error.field) setErrors({ [error.field]: error.message });
-        else toast.error(error.message);
+      if (error instanceof ApiError && error.field) {
+        setErrors({ [error.field]: error.message });
       } else {
-        toast.error('We could not send the invitation. Check your connection and try again.');
+        toast.error(
+          userMessageFor(error, 'We could not send the invitation. Check your connection and try again.'),
+        );
       }
     } finally {
       setSending(false);
@@ -110,7 +112,7 @@ export function StaffInvite() {
       if (resent.devInviteUrl) setDevInviteUrl(resent.devInviteUrl);
       await queryClient.invalidateQueries({ queryKey: ['invitations'] });
     } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : 'We could not resend that invitation.');
+      toast.error(userMessageFor(error, 'We could not resend that invitation.'));
     } finally {
       setBusyId(null);
     }
@@ -123,7 +125,7 @@ export function StaffInvite() {
       toast.success('Invitation revoked.');
       await queryClient.invalidateQueries({ queryKey: ['invitations'] });
     } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : 'We could not revoke that invitation.');
+      toast.error(userMessageFor(error, 'We could not revoke that invitation.'));
     } finally {
       setBusyId(null);
     }

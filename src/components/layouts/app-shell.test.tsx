@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AppShell } from './app-shell';
 import { useAuth } from '@/hooks/use-auth';
 
@@ -31,9 +32,30 @@ const profile = {
   user: { id: 'u1', name: 'Ada', email: 'ada@pharmacy.com', phone: null, status: 'ACTIVE' },
   organisation: { id: 'o1', name: 'Ada Pharmacy' },
   membership: { role: 'OWNER', active: true },
+  // Navigation is filtered by the effective permission set the API returns; an
+  // owner holds every key, so the shell must show every destination.
+  permissions: [
+    'branch:read',
+    'expiry:read',
+    'inventory:count',
+    'inventory:read',
+    'inventory:receive',
+    'product:manage',
+    'product:read',
+    'report:read',
+    'sale:record',
+    'staff:permissions',
+    'staff:read',
+    'supplier:read',
+    'transfer:read',
+  ],
   onboarding: { requiresSetup: false, allTasksDone: true, checklist: [] },
   nextPath: '/dashboard',
 };
+
+// The shell resolves the active branch through the query cache, so it has to sit
+// inside the provider the real app mounts at the root.
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
 function renderAt(path: string) {
   pathname = path;
@@ -45,9 +67,11 @@ function renderAt(path: string) {
     signOut,
   });
   return render(
-    <AppShell>
-      <p>page body</p>
-    </AppShell>,
+    <QueryClientProvider client={queryClient}>
+      <AppShell>
+        <p>page body</p>
+      </AppShell>
+    </QueryClientProvider>,
   );
 }
 

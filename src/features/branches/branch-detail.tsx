@@ -14,7 +14,7 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { toast } from '@/components/ui/toast';
 import { useAuth } from '@/hooks/use-auth';
 import { usePermissions } from '@/hooks/use-permissions';
-import { ApiError } from '@/services/api';
+import { userMessageFor } from '@/lib/api-errors';
 import { branchApi, staffApi } from '@/services/platform';
 import { ROLE_LABELS } from '@/types/auth';
 import type { BranchDetail as BranchDetailRecord, BranchRecord, StaffRecord } from '@/types/platform';
@@ -63,7 +63,7 @@ export function BranchDetail({ branchId }: { branchId: string }) {
       toast.success(updated.status === 'ACTIVE' ? 'Branch activated.' : 'Branch deactivated.');
       await refresh({ profile: true });
     } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : 'We could not update this branch.');
+      toast.error(userMessageFor(error, 'We could not update this branch.'));
     } finally {
       setBusy(null);
     }
@@ -77,7 +77,7 @@ export function BranchDetail({ branchId }: { branchId: string }) {
       toast.success(managerUserId ? 'Branch manager assigned.' : 'Branch manager cleared.');
       await refresh();
     } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : 'We could not assign that manager.');
+      toast.error(userMessageFor(error, 'We could not assign that manager.'));
     } finally {
       setBusy(null);
     }
@@ -92,7 +92,7 @@ export function BranchDetail({ branchId }: { branchId: string }) {
       setSelected(null);
       await refresh();
     } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : 'We could not update branch staff.');
+      toast.error(userMessageFor(error, 'We could not update branch staff.'));
     } finally {
       setBusy(null);
     }

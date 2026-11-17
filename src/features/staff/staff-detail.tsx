@@ -17,6 +17,7 @@ import { toast } from '@/components/ui/toast';
 import { useAuth } from '@/hooks/use-auth';
 import { usePermissions } from '@/hooks/use-permissions';
 import { ApiError } from '@/services/api';
+import { userMessageFor } from '@/lib/api-errors';
 import { branchApi, staffApi } from '@/services/platform';
 import { ROLE_LABELS, STAFF_ROLES, type Role } from '@/types/auth';
 import type { BranchRecord, StaffActivityEntry, StaffDetail as StaffDetailRecord } from '@/types/platform';
@@ -67,7 +68,7 @@ export function StaffDetail({ userId }: { userId: string }) {
       toast.success(message);
       await refresh({ profile: true });
     } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : 'That action could not be completed.');
+      toast.error(userMessageFor(error, 'That action could not be completed.'));
     } finally {
       setBusy(null);
       setConfirmRemove(false);
@@ -396,11 +397,10 @@ function EditMemberCard({
       toast.success('Staff details saved.');
       onSaved();
     } catch (error) {
-      if (error instanceof ApiError) {
-        if (error.field) setErrors({ [error.field]: error.message });
-        else toast.error(error.message);
+      if (error instanceof ApiError && error.field) {
+        setErrors({ [error.field]: error.message });
       } else {
-        toast.error('We could not save these details.');
+        toast.error(userMessageFor(error, 'We could not save these details.'));
       }
     } finally {
       setSaving(false);

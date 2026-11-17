@@ -11,7 +11,7 @@ import { SectionLoader } from '@/components/ui/loading';
 import { toast } from '@/components/ui/toast';
 import { useAuth } from '@/hooks/use-auth';
 import { usePermissions } from '@/hooks/use-permissions';
-import { ApiError } from '@/services/api';
+import { userMessageFor } from '@/lib/api-errors';
 import { permissionApi } from '@/services/platform';
 import type { PermissionCatalogue, RolePermissions } from '@/types/platform';
 import type { Role } from '@/types/auth';
@@ -83,7 +83,7 @@ export function RolePermissionsMatrix() {
       await refreshProfile();
       setDraft(null);
     } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : 'We could not save that role.');
+      toast.error(userMessageFor(error, 'We could not save that role.'));
     } finally {
       setSaving(false);
     }

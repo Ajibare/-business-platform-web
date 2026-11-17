@@ -15,7 +15,7 @@ import { SectionLoader } from '@/components/ui/loading';
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui/toast';
 import { usePermissions } from '@/hooks/use-permissions';
-import { ApiError } from '@/services/api';
+import { userMessageFor } from '@/lib/api-errors';
 import { organisationApi, transferApi } from '@/services/platform';
 import type { TransferRecord, TransferStatus } from '@/types/platform';
 import { TransferCreate } from './transfer-create';
@@ -85,7 +85,7 @@ export function StockTransfers() {
       await refresh();
       return true;
     } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : 'That step could not be completed.');
+      toast.error(userMessageFor(error, 'That step could not be completed.'));
       return false;
     } finally {
       setBusy(null);
@@ -102,7 +102,7 @@ export function StockTransfers() {
       );
       await settings.refetch();
     } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : 'We could not change that setting.');
+      toast.error(userMessageFor(error, 'We could not change that setting.'));
     }
   };
 
@@ -132,7 +132,7 @@ export function StockTransfers() {
       setReceivingId(null);
       await refresh();
     } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : 'We could not receive this transfer.');
+      toast.error(userMessageFor(error, 'We could not receive this transfer.'));
     } finally {
       setBusy(null);
     }

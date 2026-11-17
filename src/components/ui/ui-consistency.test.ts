@@ -52,16 +52,25 @@ describe('dropdowns', () => {
   });
 
   it('routes every existing dropdown through the shared component', () => {
-    // Every screen that had a dropdown at the time of the audit; reverting one
-    // to a native control fails here by name.
+    // Every screen that offers a dropdown; the list is exhaustive, so a screen
+    // that drops back to a native control fails here by name.
     const expected = [
+      'components/branches/branch-switcher.tsx',
       'components/imports/column-mapping-table.tsx',
       'components/pharmacy/movement-form.tsx',
+      'features/branches/branch-detail.tsx',
       'features/onboarding/pharmacy-profile-step.tsx',
       'features/onboarding/staff-invite-panel.tsx',
       'features/pharmacy/bulk-medicines.tsx',
       'features/pharmacy/record-sale.tsx',
       'features/pharmacy/stock-receipts.tsx',
+      'features/reports/organisation-reports.tsx',
+      'features/staff/staff-detail.tsx',
+      'features/staff/staff-invite.tsx',
+      'features/staff/staff-list.tsx',
+      'features/staff/staff-permissions.tsx',
+      'features/transfers/stock-transfers.tsx',
+      'features/transfers/transfer-create.tsx',
     ];
     const users = files
       .filter((file) =>
