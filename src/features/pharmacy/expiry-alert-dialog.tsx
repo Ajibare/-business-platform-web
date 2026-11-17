@@ -10,7 +10,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
+import { SectionLoader } from '@/components/ui/loading';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/format';
 import { hasSeenExpiryAlert, markExpiryAlertSeen } from '@/lib/expiry-popup';
@@ -80,6 +80,8 @@ export function ExpiryAlertDialog() {
   const alerts = useQuery<ExpiryAlerts>({
     queryKey: ['pharmacy', 'expiry', 'alerts', 90],
     queryFn: () => apiFetch<ExpiryAlerts>('/pharmacy/expiry/alerts?days=90'),
+    // The dialog prints its own failure.
+    meta: { silent: true },
     enabled: open && Boolean(organizationId),
     staleTime: 60_000,
   });
@@ -152,10 +154,8 @@ export function ExpiryAlertDialog() {
         </div>
 
         {alerts.isLoading ? (
-          <div className="space-y-2 p-4">
-            {[0, 1, 2].map((index) => (
-              <Skeleton key={index} className="h-16 w-full" />
-            ))}
+          <div className="p-4">
+            <SectionLoader label="Loading expiry alerts…" className="py-6" />
           </div>
         ) : null}
 

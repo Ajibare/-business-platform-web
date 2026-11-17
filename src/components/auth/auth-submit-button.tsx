@@ -1,7 +1,7 @@
 'use client';
 
-import { Loader2 } from 'lucide-react';
 import { Button, ButtonProps } from '@/components/ui/button';
+import { LoadingGif } from '@/components/ui/loading';
 import { cn } from '@/lib/utils';
 
 export interface AuthSubmitButtonProps extends ButtonProps {
@@ -10,9 +10,9 @@ export interface AuthSubmitButtonProps extends ButtonProps {
 }
 
 /**
- * 48px primary action. While a request is in flight it is disabled and shows a
- * spinner with an `aria-busy` state, so the form can never be submitted twice
- * by an impatient double tap.
+ * 48px primary action. While a request is in flight it is disabled and shows the
+ * shared loading animation with an `aria-busy` state, so the form can never be
+ * submitted twice by an impatient double tap.
  */
 export function AuthSubmitButton({
   isLoading = false,
@@ -33,7 +33,7 @@ export function AuthSubmitButton({
     >
       {isLoading ? (
         <>
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+          <LoadingGif className="mr-2 h-4 w-4" />
           {loadingLabel}
         </>
       ) : (

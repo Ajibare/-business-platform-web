@@ -11,6 +11,7 @@ import { AuthErrorMessage } from '@/components/auth/auth-message';
 import { AuthSubmitButton } from '@/components/auth/auth-submit-button';
 import { PasswordInput } from '@/components/auth/password-input';
 import { PasswordStrengthIndicator } from '@/components/auth/password-strength-indicator';
+import { PageLoader } from '@/components/ui/loading';
 import { useAuth } from '@/hooks/use-auth';
 import { InvitationAcceptValues, invitationAcceptSchema } from '@/lib/auth-validation';
 import { ApiError } from '@/services/api';
@@ -104,12 +105,7 @@ export function InvitationAcceptance({ token }: InvitationAcceptanceProps) {
   };
 
   if (isLoading) {
-    return (
-      <div className="space-y-3" aria-busy="true">
-        <div className="h-5 w-40 animate-pulse rounded bg-slate-200" />
-        <div className="h-24 w-full animate-pulse rounded bg-slate-100" />
-      </div>
-    );
+    return <PageLoader className="min-h-[12rem] py-0" label="Checking this invitation…" />;
   }
 
   if (loadError || !preview) {

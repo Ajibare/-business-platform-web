@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { MetricCard } from '@/components/ui/metric-card';
-import { Skeleton } from '@/components/ui/skeleton';
+import { SectionLoader } from '@/components/ui/loading';
 import { formatCurrency } from '@/lib/format';
 
 const todayKey = () => new Date().toLocaleDateString('en-CA');
@@ -26,6 +26,8 @@ export function DailyPerformance() {
 
   const performance = useQuery<DailyPerformanceData>({
     queryKey: ['pharmacy', 'reports', 'daily', date],
+    // The card prints its own failure above the figures.
+    meta: { silent: true },
     queryFn: () => apiFetch<DailyPerformanceData>(`/pharmacy/reports/daily?date=${date}`),
   });
 
@@ -62,15 +64,9 @@ export function DailyPerformance() {
       </div>
 
       {performance.isLoading ? (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {[0, 1, 2, 3].map((index) => (
-            <Card key={index} className="p-4">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="mt-4 h-8 w-16" />
-              <Skeleton className="mt-4 h-3 w-full" />
-            </Card>
-          ))}
-        </div>
+        <Card className="p-4">
+          <SectionLoader label="Loading daily performance…" />
+        </Card>
       ) : null}
 
       {performance.error ? (

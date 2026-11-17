@@ -18,7 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
+import { InlineLoader, SectionLoader } from '@/components/ui/loading';
 import { Switch } from '@/components/ui/switch';
 import { formatCurrency, formatDateTime } from '@/lib/format';
 
@@ -39,11 +39,14 @@ const DELIVERY_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 export function NotificationSettings() {
   const preferences = useQuery<NotificationPreferences>({
     queryKey: ['notifications', 'preferences'],
+    // The page prints its own failure above the form.
+    meta: { silent: true },
     queryFn: () => apiFetch<NotificationPreferences>('/notifications/preferences'),
   });
 
   const capabilities = useQuery<NotificationCapabilities>({
     queryKey: ['notifications', 'capabilities'],
+    meta: { silent: true },
     queryFn: () => apiFetch<NotificationCapabilities>('/notifications/capabilities'),
   });
 
@@ -75,8 +78,7 @@ export function NotificationSettings() {
 
       {preferences.isLoading ? (
         <Card className="p-6">
-          <Skeleton className="h-6 w-48" />
-          <Skeleton className="mt-4 h-24 w-full" />
+          <SectionLoader label="Loading notification settings…" />
         </Card>
       ) : null}
 
@@ -115,9 +117,12 @@ function PreferencesForm({ initial }: { initial: NotificationPreferences }) {
     dailyReportTime: initial.dailyReportTime,
     dailyReportTimezone: initial.dailyReportTimezone ?? '',
   });
-  const [feedback, setFeedback] = useState<string | null>(null);
 
   const save = useMutation({
+    meta: {
+      successMessage: 'Notification preferences saved.',
+      errorMessage: 'Unable to save your notification preferences. Please try again.',
+    },
     mutationFn: () =>
       apiFetch<NotificationPreferences>('/notifications/preferences', {
         method: 'PATCH',
@@ -135,10 +140,8 @@ function PreferencesForm({ initial }: { initial: NotificationPreferences }) {
         }),
       }),
     onSuccess: () => {
-      setFeedback('Notification preferences saved.');
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
-    onError: (error: Error) => setFeedback(error.message),
   });
 
   const leadDays = Number(form.reminderLeadDays);
@@ -163,12 +166,6 @@ function PreferencesForm({ initial }: { initial: NotificationPreferences }) {
         expiry and again once a batch has expired. Changes take effect on the next scheduled scan or
         when you run a scan manually.
       </p>
-
-      {feedback ? (
-        <Alert tone={save.isError ? 'danger' : 'success'} className="mt-4">
-          {feedback}
-        </Alert>
-      ) : null}
 
       <div className="mt-4 space-y-4">
         <Switch
@@ -310,7 +307,7 @@ function PreferencesForm({ initial }: { initial: NotificationPreferences }) {
         onClick={() => save.mutate()}
         disabled={save.isPending || scheduleInvalid || deliveryTimeInvalid}
       >
-        {save.isPending ? 'Saving…' : 'Save preferences'}
+        {save.isPending ? <InlineLoader label="Saving…" /> : 'Save preferences'}
       </Button>
     </Card>
   );
@@ -323,11 +320,15 @@ function DailySalesReportCard() {
 
   const report = useQuery<DailyReport>({
     queryKey: ['notifications', 'daily-report', date],
+    // The card prints its own failure above the figures.
+    meta: { silent: true },
     queryFn: () =>
       apiFetch<DailyReport>(`/notifications/daily-report${date ? `?date=${date}` : ''}`),
   });
 
   const sendNow = useMutation({
+    // A send has its own result panel: sent, skipped, or failed, with counts.
+    meta: { silent: true },
     mutationFn: () =>
       apiFetch<DailyReportSendResult>('/notifications/daily-report/send', {
         method: 'POST',
@@ -401,13 +402,13 @@ function DailySalesReportCard() {
         </label>
         <Button variant="outline" onClick={() => report.refetch()} disabled={report.isFetching}>
           <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
-          {report.isFetching ? 'Refreshing…' : 'Refresh'}
+          {report.isFetching ? <InlineLoader label="Refreshing…" /> : 'Refresh'}
         </Button>
         <Button
           onClick={() => sendNow.mutate()}
           disabled={sendNow.isPending || !report.data}
         >
-          {sendNow.isPending ? 'Sending…' : 'Send this report now'}
+          {sendNow.isPending ? <InlineLoader label="Sending…" /> : 'Send this report now'}
         </Button>
       </div>
 
@@ -436,11 +437,7 @@ function DailySalesReportCard() {
       ) : null}
 
       {report.isLoading ? (
-        <div className="mt-4 space-y-2">
-          {[0, 1, 2].map((index) => (
-            <Skeleton key={index} className="h-10 w-full" />
-          ))}
-        </div>
+        <SectionLoader label="Loading the daily summary…" />
       ) : null}
 
       {report.data && summary ? (
@@ -475,16 +472,20 @@ function RecipientsCard() {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [receivesExpiry, setReceivesExpiry] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   const recipients = useQuery<NotificationRecipient[]>({
     queryKey: ['notifications', 'recipients'],
+    meta: { silent: true },
     queryFn: () => apiFetch<NotificationRecipient[]>('/notifications/recipients'),
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['notifications', 'recipients'] });
 
   const create = useMutation({
+    meta: {
+      successMessage: 'Recipient added successfully.',
+      errorMessage: 'Unable to add that recipient. Please try again.',
+    },
     mutationFn: () =>
       apiFetch('/notifications/recipients', {
         method: 'POST',
@@ -494,27 +495,31 @@ function RecipientsCard() {
       setEmail('');
       setName('');
       setReceivesExpiry(true);
-      setError(null);
       invalidate();
     },
-    onError: (err: Error) => setError(err.message),
   });
 
   const update = useMutation({
+    meta: {
+      successMessage: 'Recipient updated successfully.',
+      errorMessage: 'Unable to update that recipient. Please try again.',
+    },
     mutationFn: (input: { id: string; body: Record<string, unknown> }) =>
       apiFetch(`/notifications/recipients/${input.id}`, {
         method: 'PATCH',
         body: JSON.stringify(input.body),
       }),
     onSuccess: invalidate,
-    onError: (err: Error) => setError(err.message),
   });
 
   const remove = useMutation({
+    meta: {
+      successMessage: 'Recipient removed.',
+      errorMessage: 'Unable to remove that recipient. Please try again.',
+    },
     mutationFn: (id: string) =>
       apiFetch(`/notifications/recipients/${id}`, { method: 'DELETE' }),
     onSuccess: invalidate,
-    onError: (err: Error) => setError(err.message),
   });
 
   const submit = (event: FormEvent) => {
@@ -533,12 +538,6 @@ function RecipientsCard() {
         Only active recipients receive expiry reminder emails. Removing a recipient keeps the
         delivery history.
       </p>
-
-      {error ? (
-        <Alert tone="danger" className="mt-4">
-          {error}
-        </Alert>
-      ) : null}
 
       <form className="mt-4 grid gap-3 md:grid-cols-3" onSubmit={submit}>
         <label className="block text-sm">
@@ -564,7 +563,7 @@ function RecipientsCard() {
         </label>
         <div className="flex items-end">
           <Button type="submit" disabled={create.isPending || !email.trim()} className="w-full">
-            {create.isPending ? 'Adding…' : 'Add recipient'}
+            {create.isPending ? <InlineLoader label="Adding…" /> : 'Add recipient'}
           </Button>
         </div>
       </form>
@@ -580,13 +579,7 @@ function RecipientsCard() {
       </div>
 
       <div className="mt-6">
-        {recipients.isLoading ? (
-          <div className="space-y-2">
-            {[0, 1].map((index) => (
-              <Skeleton key={index} className="h-14 w-full" />
-            ))}
-          </div>
-        ) : null}
+        {recipients.isLoading ? <SectionLoader label="Loading recipients…" /> : null}
 
         {recipients.error ? (
           <div>
@@ -686,30 +679,38 @@ function RecipientsCard() {
 
 function DeliveriesCard() {
   const queryClient = useQueryClient();
-  const [error, setError] = useState<string | null>(null);
 
   const deliveries = useQuery<NotificationDelivery[]>({
     queryKey: ['notifications', 'deliveries'],
+    // The table below prints its own failure with a retry.
+    meta: { silent: true },
     queryFn: () => apiFetch<NotificationDelivery[]>('/notifications/deliveries?limit=25'),
   });
 
   const retry = useMutation({
+    meta: {
+      successMessage: 'Delivery retried.',
+      errorMessage: 'Unable to retry that delivery. Please try again.',
+    },
     mutationFn: (id: string) =>
       apiFetch(`/notifications/deliveries/${id}/retry`, { method: 'POST' }),
     onSuccess: () => {
-      setError(null);
       queryClient.invalidateQueries({ queryKey: ['notifications', 'deliveries'] });
     },
-    onError: (err: Error) => setError(err.message),
   });
 
   return (
     <Card className="p-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold text-ink">Email delivery history</h2>
-        <Button variant="outline" size="sm" onClick={() => deliveries.refetch()}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => deliveries.refetch()}
+          disabled={deliveries.isFetching}
+        >
           <RotateCcw className="mr-1 h-3 w-3" aria-hidden="true" />
-          Refresh
+          {deliveries.isFetching ? <InlineLoader label="Refreshing…" /> : 'Refresh'}
         </Button>
       </div>
       <p className="mt-1 text-sm text-slate">
@@ -717,18 +718,8 @@ function DeliveriesCard() {
         until the maximum attempt count is reached.
       </p>
 
-      {error ? (
-        <Alert tone="danger" className="mt-4">
-          {error}
-        </Alert>
-      ) : null}
-
       {deliveries.isLoading ? (
-        <div className="mt-4 space-y-2">
-          {[0, 1, 2].map((index) => (
-            <Skeleton key={index} className="h-12 w-full" />
-          ))}
-        </div>
+        <SectionLoader label="Loading delivery history…" />
       ) : null}
 
       {deliveries.error ? (
@@ -799,7 +790,9 @@ function DeliveriesCard() {
                         onClick={() => retry.mutate(delivery.id)}
                         disabled={retry.isPending}
                       >
-                        Retry
+                        {retry.isPending && retry.variables === delivery.id
+                          ? <InlineLoader label="Retrying…" />
+                          : 'Retry'}
                       </Button>
                     ) : (
                       <span className="text-xs text-slate">Delivered</span>

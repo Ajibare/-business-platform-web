@@ -8,6 +8,8 @@ import { Medicine, StockReceipt, StockReceiptLine } from '@/types/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { InlineLoader, SectionLoader } from '@/components/ui/loading';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 
 interface ReceiptLineDraft {
   key: string;
@@ -30,15 +32,20 @@ const emptyLine = (): ReceiptLineDraft => ({
 export function StockReceipts() {
   const queryClient = useQueryClient();
   const [lines, setLines] = useState<ReceiptLineDraft[]>([emptyLine()]);
-  const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<StockReceipt | null>(null);
 
   const medicines = useQuery<Medicine[]>({
     queryKey: ['pharmacy', 'medicines'],
+    // The picker stays empty and the panel below says why.
+    meta: { silent: true },
     queryFn: () => apiFetch<Medicine[]>('/pharmacy/medicines?limit=100'),
   });
 
   const createReceipt = useMutation({
+    meta: {
+      successMessage: 'Stock received successfully. Confirm the receipt to add it to stock.',
+      errorMessage: 'Unable to create the receipt. Please try again.',
+    },
     mutationFn: async () => {
       const body = {
         externalReference: 'Received via stock receipts',
@@ -59,12 +66,14 @@ export function StockReceipts() {
     },
     onSuccess: (created) => {
       setReceipt(created);
-      setError(null);
     },
-    onError: (err: Error) => setError(err.message || 'Unable to create receipt'),
   });
 
   const confirmReceipt = useMutation({
+    meta: {
+      successMessage: 'Receipt confirmed. The stock is now available.',
+      errorMessage: 'Unable to confirm the receipt. Please try again.',
+    },
     mutationFn: async () => {
       if (!receipt) return null;
       return apiFetch<StockReceipt>(`/pharmacy/receipts/${receipt.id}/confirm`, {
@@ -97,33 +106,40 @@ export function StockReceipts() {
         </p>
       </div>
 
-      {error ? (
-        <Card className="p-6">
-          <h2 className="text-lg font-semibold text-ink">Unable to complete the receipt</h2>
-          <p className="mt-2 text-sm text-slate">{error}</p>
-        </Card>
-      ) : null}
-
       <Card className="p-6">
         <h2 className="text-lg font-semibold text-ink">New receipt</h2>
         <p className="mt-1 text-sm text-slate">Add one line per received batch.</p>
 
+        {medicines.isLoading ? <SectionLoader label="Loading medicines…" className="py-6" /> : null}
+        {medicines.error ? (
+          <p className="mt-3 text-sm text-danger">
+            {medicines.error instanceof Error
+              ? medicines.error.message
+              : 'Unable to load medicines.'}
+          </p>
+        ) : null}
+
         <div className="mt-4 space-y-3">
           {lines.map((line) => (
             <div key={line.key} className="grid gap-3 rounded-md border border-border p-3 md:grid-cols-6">
-              <select
+              <SearchableSelect
+                ariaLabel="Medicine"
+                className="col-span-2"
                 value={line.productId}
-                onChange={(e) => updateLine(line.key, { productId: e.target.value })}
-                className="col-span-2 h-9 rounded-md border border-border bg-white px-2 text-sm text-ink"
-                aria-label="Medicine"
-              >
-                <option value="">Select medicine</option>
-                {(medicines.data ?? []).map((medicine) => (
-                  <option key={medicine.id} value={medicine.id}>
-                    {medicine.name}
-                  </option>
-                ))}
-              </select>
+                onChange={(next) => updateLine(line.key, { productId: next })}
+                options={(medicines.data ?? []).map((medicine) => ({
+                  value: medicine.id,
+                  label: medicine.name,
+                  description: [medicine.strength, medicine.dosageForm, medicine.unit]
+                    .filter(Boolean)
+                    .join(' · '),
+                }))}
+                placeholder="Select medicine"
+                searchPlaceholder="Search medicines…"
+                emptyMessage="No medicine matches that search. Add it first."
+                loading={medicines.isLoading}
+                clearable
+              />
               <input
                 type="text"
                 value={line.batchNumber}
@@ -185,7 +201,7 @@ export function StockReceipts() {
             disabled={createReceipt.isPending || !canCreate}
           >
             <Send className="mr-2 h-4 w-4" aria-hidden="true" />
-            Create receipt
+            {createReceipt.isPending ? <InlineLoader label="Creating…" /> : 'Create receipt'}
           </Button>
         </div>
       </Card>
@@ -222,7 +238,7 @@ export function StockReceipts() {
               disabled={confirmReceipt.isPending || receipt.status !== 'DRAFT'}
             >
               <Check className="mr-2 h-4 w-4" aria-hidden="true" />
-              Confirm receipt
+              {confirmReceipt.isPending ? <InlineLoader label="Confirming…" /> : 'Confirm receipt'}
             </Button>
           </div>
         </Card>

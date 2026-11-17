@@ -5,9 +5,9 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { Tag } from 'lucide-react';
 import { apiFetch } from '@/services/api';
 import { Medicine } from '@/types/api';
-import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { InlineLoader } from '@/components/ui/loading';
 
 export interface AssignBarcodePanelProps {
   barcode: string;
@@ -23,26 +23,28 @@ export function AssignBarcodePanel({ barcode, onAssigned }: AssignBarcodePanelPr
   const [term, setTerm] = useState('');
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const products = useQuery<Medicine[]>({
     queryKey: ['pharmacy', 'medicines', 'scan-assign', search],
+    // Search failures are shown under the search box, next to the field the
+    // user just used.
+    meta: { silent: true },
     queryFn: () =>
       apiFetch<Medicine[]>(`/pharmacy/medicines?limit=10&q=${encodeURIComponent(search)}`),
     enabled: search.trim().length >= 2,
   });
 
   const assign = useMutation({
+    meta: {
+      successMessage: 'Barcode assigned successfully.',
+      errorMessage: 'Unable to assign this barcode. Please try again.',
+    },
     mutationFn: (productId: string) =>
       apiFetch(`/pharmacy/barcodes/product/${productId}`, {
         method: 'PUT',
         body: JSON.stringify({ barcode }),
       }),
-    onSuccess: () => {
-      setError(null);
-      onAssigned();
-    },
-    onError: (cause: Error) => setError(cause.message),
+    onSuccess: () => onAssigned(),
   });
 
   const submit = (event: FormEvent) => {
@@ -71,19 +73,11 @@ export function AssignBarcodePanel({ barcode, onAssigned }: AssignBarcodePanelPr
         </Button>
       </form>
 
-      {error ? (
-        <Alert tone="danger" className="mt-3">
-          {error}
-        </Alert>
+      {products.isFetching ? (
+        <div className="mt-3 text-xs text-slate">
+          <InlineLoader label="Searching the catalogue…" />
+        </div>
       ) : null}
-
-      {assign.isSuccess ? (
-        <Alert tone="success" className="mt-3">
-          Barcode assigned. The product can now be found by scanning.
-        </Alert>
-      ) : null}
-
-      {products.isFetching ? <p className="mt-3 text-xs text-slate">Searching…</p> : null}
 
       {products.error ? (
         <p className="mt-3 text-xs text-danger">
@@ -128,7 +122,7 @@ export function AssignBarcodePanel({ barcode, onAssigned }: AssignBarcodePanelPr
             disabled={!selectedId || assign.isPending}
           >
             <Tag className="mr-2 h-4 w-4" aria-hidden="true" />
-            {assign.isPending ? 'Assigning…' : 'Assign barcode'}
+            {assign.isPending ? <InlineLoader label="Assigning…" /> : 'Assign barcode'}
           </Button>
         </div>
       ) : null}

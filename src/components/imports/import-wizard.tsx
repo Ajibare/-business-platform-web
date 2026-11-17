@@ -9,7 +9,7 @@ import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
+import { InlineLoader, SectionLoader } from '@/components/ui/loading';
 import { ColumnMappingTable } from './column-mapping-table';
 import { DownloadTemplateButton } from './download-template-button';
 import { FileUpload, UploadedFile } from './file-upload';
@@ -53,10 +53,11 @@ export function ImportWizard({ initialType = 'PRODUCTS' }: ImportWizardProps) {
   const [job, setJob] = useState<ImportJobDetail | null>(null);
   const [result, setResult] = useState<ImportJobDetail | null>(null);
   const [mappingDraft, setMappingDraft] = useState<Record<string, string | null>>({});
-  const [error, setError] = useState<string | null>(null);
 
   const schema = useQuery<ImportTypeSchema>({
     queryKey: ['pharmacy', 'imports', 'schema', type],
+    // The step prints its own failure under the template details.
+    meta: { silent: true },
     queryFn: () => apiFetch<ImportTypeSchema>(`/pharmacy/imports/schema/${type}`),
   });
 
@@ -77,10 +78,12 @@ export function ImportWizard({ initialType = 'PRODUCTS' }: ImportWizardProps) {
     setType(next);
     setFile(null);
     resetReview();
-    setError(null);
   };
 
   const validate = useMutation({
+    // The wizard keeps its own result panels; the popup carries the headline for
+    // a file the server could not read.
+    meta: { errorMessage: 'We could not read that file. Check the columns and try again.' },
     mutationFn: (input: { file: UploadedFile; mapping?: Record<string, string> }) =>
       apiFetch<ImportJobDetail>('/pharmacy/imports', {
         method: 'POST',
@@ -97,27 +100,26 @@ export function ImportWizard({ initialType = 'PRODUCTS' }: ImportWizardProps) {
     onSuccess: (validated) => {
       setJob(validated);
       setResult(null);
-      setError(null);
     },
-    onError: (cause: Error) => setError(cause.message),
   });
 
   const confirm = useMutation({
+    meta: {
+      successMessage: 'Import completed successfully.',
+      errorMessage: 'The import was not completed. Please try again.',
+    },
     mutationFn: (jobId: string) =>
       apiFetch<ImportJobDetail>(`/pharmacy/imports/${jobId}/confirm`, { method: 'POST' }),
     onSuccess: (completed) => {
       setResult(completed);
       setJob(null);
-      setError(null);
       queryClient.invalidateQueries({ queryKey: ['pharmacy'] });
     },
-    onError: (cause: Error) => setError(cause.message),
   });
 
   const handleFile = (uploaded: UploadedFile) => {
     setFile(uploaded);
     resetReview();
-    setError(null);
     validate.mutate({ file: uploaded });
   };
 
@@ -128,7 +130,6 @@ export function ImportWizard({ initialType = 'PRODUCTS' }: ImportWizardProps) {
   const startAgain = () => {
     setFile(null);
     resetReview();
-    setError(null);
   };
 
   const busy = validate.isPending || confirm.isPending;
@@ -175,7 +176,7 @@ export function ImportWizard({ initialType = 'PRODUCTS' }: ImportWizardProps) {
               2. Download and prepare the template
             </h2>
 
-            {schema.isLoading ? <Skeleton className="mt-4 h-24 w-full" /> : null}
+            {schema.isLoading ? <SectionLoader label="Loading template details…" className="py-6" /> : null}
 
             {schema.error ? (
               <Alert tone="danger" className="mt-4" title="Unable to load the template details">
@@ -256,12 +257,6 @@ export function ImportWizard({ initialType = 'PRODUCTS' }: ImportWizardProps) {
         </>
       )}
 
-      {error ? (
-        <Alert tone="danger" title="Import failed">
-          {error}
-        </Alert>
-      ) : null}
-
       {job && !result ? (
         <Card className="p-6">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
@@ -335,7 +330,7 @@ export function ImportWizard({ initialType = 'PRODUCTS' }: ImportWizardProps) {
               onClick={() => confirm.mutate(job.id)}
               disabled={busy || job.validRows === 0 || job.status !== 'VALIDATED'}
             >
-              {confirm.isPending ? 'Importing…' : `Import ${job.validRows} valid row(s)`}
+              {confirm.isPending ? <InlineLoader label="Importing…" /> : `Import ${job.validRows} valid row(s)`}
             </Button>
             <Button variant="outline" onClick={startAgain} disabled={busy}>
               Upload a different file

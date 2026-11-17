@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { AuthCard } from '@/components/auth/auth-card';
 import { AuthLayout } from '@/components/layouts/auth-layout';
+import { PageLoader } from '@/components/ui/loading';
 import { SignInForm } from '@/features/auth/sign-in-form';
 
 export const metadata: Metadata = {
@@ -29,7 +30,9 @@ export default function SignInPage() {
           </p>
         }
       >
-        <Suspense fallback={<div className="h-72 animate-pulse rounded-md bg-slate-100" />}>
+        <Suspense
+          fallback={<PageLoader className="min-h-[18rem] py-0" label="Loading sign-in…" />}
+        >
           <SignInForm />
         </Suspense>
       </AuthCard>

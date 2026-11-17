@@ -1,13 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AuthInput } from '@/components/auth/auth-input';
 import { AuthErrorMessage } from '@/components/auth/auth-message';
 import { AuthSubmitButton } from '@/components/auth/auth-submit-button';
 import { OnboardingStep } from '@/components/onboarding/onboarding-step';
-import { SelectField } from '@/components/onboarding/select-field';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { PharmacyProfileValues, pharmacyProfileSchema, TIME_ZONES } from '@/lib/auth-validation';
 import { ApiError } from '@/services/api';
 import { onboardingApi } from '@/services/auth';
@@ -26,6 +26,7 @@ export function PharmacyProfileStep({
   const [formError, setFormError] = useState<string | null>(null);
 
   const {
+    control,
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
@@ -81,13 +82,22 @@ export function PharmacyProfileStep({
           {...register('name')}
         />
 
-        <SelectField
-          label="Outlet profile"
-          required
-          placeholder="Select the outlet type"
-          options={OUTLET_OPTIONS}
-          error={errors.outletProfile?.message}
-          {...register('outletProfile')}
+        <Controller
+          control={control}
+          name="outletProfile"
+          render={({ field }) => (
+            <SearchableSelect
+              label="Outlet profile"
+              required
+              value={field.value ?? ''}
+              onChange={field.onChange}
+              options={OUTLET_OPTIONS}
+              placeholder="Select the outlet type"
+              searchPlaceholder="Search outlet types…"
+              emptyMessage="No outlet type matches that search."
+              error={errors.outletProfile?.message}
+            />
+          )}
         />
 
         <AuthInput
@@ -99,14 +109,26 @@ export function PharmacyProfileStep({
           {...register('address')}
         />
 
-        <SelectField
-          label="Time zone"
-          required
-          options={TIME_ZONE_OPTIONS}
-          hint="Used for expiry windows and reminders. Nigerian pharmacies usually use Africa/Lagos."
-          error={errors.timezone?.message}
-          {...register('timezone')}
+        <Controller
+          control={control}
+          name="timezone"
+          render={({ field }) => (
+            <SearchableSelect
+              label="Time zone"
+              required
+              value={field.value ?? ''}
+              onChange={field.onChange}
+              options={TIME_ZONE_OPTIONS}
+              searchPlaceholder="Search time zones…"
+              emptyMessage="No time zone matches that search."
+              error={errors.timezone?.message}
+            />
+          )}
         />
+
+        <p className="text-xs text-slate">
+          Used for expiry windows and reminders. Nigerian pharmacies usually use Africa/Lagos.
+        </p>
 
         <AuthErrorMessage>{formError}</AuthErrorMessage>
       </OnboardingStep>

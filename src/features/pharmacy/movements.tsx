@@ -7,7 +7,7 @@ import { Movement } from '@/types/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
+import { SectionLoader } from '@/components/ui/loading';
 
 function statusFor(type: string) {
   switch (type) {
@@ -27,6 +27,8 @@ function statusFor(type: string) {
 export function Movements() {
   const movements = useQuery<Movement[]>({
     queryKey: ['pharmacy', 'movements'],
+    // The ledger prints its own failure.
+    meta: { silent: true },
     queryFn: () => apiFetch<Movement[]>('/pharmacy/movements?limit=100'),
   });
 
@@ -46,13 +48,7 @@ export function Movements() {
           <Badge status="neutral">{movements.data?.length ?? 0} recorded</Badge>
         </div>
 
-        {movements.isLoading ? (
-          <div className="mt-4 space-y-2">
-            {[0, 1, 2, 3].map((index) => (
-              <Skeleton key={index} className="h-14 w-full" />
-            ))}
-          </div>
-        ) : null}
+        {movements.isLoading ? <SectionLoader label="Loading movements…" /> : null}
 
         {movements.error ? (
           <div className="mt-4">

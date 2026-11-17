@@ -13,6 +13,9 @@ import { NotificationUnreadCount } from '@/types/api';
 export function NotificationBell() {
   const { data } = useQuery<NotificationUnreadCount>({
     queryKey: ['notifications', 'unread-count'],
+    // A background poll on a header badge: a popup every minute the server is
+    // unreachable would be worse than a stale count.
+    meta: { silent: true },
     queryFn: () => apiFetch<NotificationUnreadCount>('/notifications/unread-count'),
     refetchInterval: 60_000,
     refetchOnWindowFocus: true,

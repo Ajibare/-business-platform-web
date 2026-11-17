@@ -7,6 +7,7 @@ import { AuthErrorMessage } from '@/components/auth/auth-message';
 import { AuthSubmitButton } from '@/components/auth/auth-submit-button';
 import { OnboardingLayout } from '@/components/onboarding/onboarding-layout';
 import { OnboardingStep } from '@/components/onboarding/onboarding-step';
+import { PageLoader } from '@/components/ui/loading';
 import { useAuth } from '@/hooks/use-auth';
 import { ApiError } from '@/services/api';
 import { onboardingApi } from '@/services/auth';
@@ -148,12 +149,7 @@ export function PharmacySetupWizard() {
   };
 
   if (isLoading) {
-    return (
-      <div className="mx-auto max-w-3xl space-y-4 px-4 py-10">
-        <div className="h-6 w-48 animate-pulse rounded bg-slate-200" />
-        <div className="h-72 w-full animate-pulse rounded-lg bg-slate-100" />
-      </div>
-    );
+    return <PageLoader label="Loading your setup progress…" />;
   }
 
   if (loadError || !overview) {

@@ -8,30 +8,36 @@ import { Supplier } from '@/types/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
+import { InlineLoader, SectionLoader } from '@/components/ui/loading';
 
-interface SupplierListResponse {
-  data: Supplier[];
-  meta: { total: number };
-}
-
+/**
+ * `apiFetch` already unwraps the API envelope, so the query returns the list
+ * itself. Declaring `{ data, meta }` here made the first successful render read
+ * `undefined.length` and crash the page.
+ */
 export function Suppliers() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [error, setError] = useState<string | null>(null);
 
-  const suppliers = useQuery<SupplierListResponse>({
+  const suppliers = useQuery<Supplier[]>({
     queryKey: ['pharmacy', 'suppliers', search],
+    // The list renders its own error panel with a retry, so it must not also
+    // raise a popup for the same failure.
+    meta: { silent: true },
     queryFn: () =>
-      apiFetch<SupplierListResponse>(
+      apiFetch<Supplier[]>(
         `/pharmacy/suppliers?limit=100${search ? `&q=${encodeURIComponent(search)}` : ''}`,
       ),
   });
 
   const createSupplier = useMutation({
+    meta: {
+      successMessage: 'Supplier created successfully.',
+      errorMessage: 'Failed to create the supplier. Please try again.',
+    },
     mutationFn: async () => {
       const created = await apiFetch<Supplier>('/pharmacy/suppliers', {
         method: 'POST',
@@ -47,10 +53,8 @@ export function Suppliers() {
       setName('');
       setPhone('');
       setEmail('');
-      setError(null);
       queryClient.invalidateQueries({ queryKey: ['pharmacy', 'suppliers'] });
     },
-    onError: (err: Error) => setError(err.message || 'Unable to create supplier'),
   });
 
   const canCreate = name.trim().length > 0;
@@ -61,13 +65,6 @@ export function Suppliers() {
         <h1 className="text-2xl font-semibold text-ink">Suppliers</h1>
         <p className="text-sm text-slate">Manage suppliers used on stock receipts.</p>
       </div>
-
-      {error ? (
-        <Card className="p-6">
-          <h2 className="text-lg font-semibold text-ink">Unable to save the supplier</h2>
-          <p className="mt-2 text-sm text-slate">{error}</p>
-        </Card>
-      ) : null}
 
       <Card className="p-6">
         <h2 className="text-lg font-semibold text-ink">New supplier</h2>
@@ -100,7 +97,7 @@ export function Suppliers() {
         <div className="mt-4">
           <Button onClick={() => createSupplier.mutate()} disabled={createSupplier.isPending || !canCreate}>
             <Building2 className="mr-2 h-4 w-4" aria-hidden="true" />
-            Add supplier
+            {createSupplier.isPending ? <InlineLoader label="Saving supplier…" /> : 'Add supplier'}
           </Button>
         </div>
       </Card>
@@ -124,12 +121,14 @@ export function Suppliers() {
           </div>
         </div>
 
-        {suppliers.isLoading ? (
-          <div className="mt-4 space-y-2">
-            {[0, 1, 2].map((index) => (
-              <Skeleton key={index} className="h-14 w-full" />
-            ))}
+        {suppliers.isFetching && !suppliers.isLoading ? (
+          <div className="mt-3 text-xs text-slate">
+            <InlineLoader label="Searching suppliers…" />
           </div>
+        ) : null}
+
+        {suppliers.isLoading ? (
+          <SectionLoader label="Loading suppliers…" className="py-6" />
         ) : null}
 
         {suppliers.error ? (
@@ -143,15 +142,17 @@ export function Suppliers() {
           </div>
         ) : null}
 
-        {suppliers.data && suppliers.data.data.length === 0 ? (
+        {suppliers.data && suppliers.data.length === 0 ? (
           <div className="mt-4">
-            <p className="text-sm text-slate">No suppliers recorded yet.</p>
+            <p className="text-sm text-slate">
+              {search ? 'No supplier matches that search.' : 'No suppliers recorded yet.'}
+            </p>
           </div>
         ) : null}
 
-        {suppliers.data && suppliers.data.data.length > 0 ? (
+        {suppliers.data && suppliers.data.length > 0 ? (
           <div className="mt-4 space-y-2">
-            {suppliers.data.data.map((supplier) => (
+            {suppliers.data.map((supplier) => (
               <div
                 key={supplier.id}
                 className="flex items-center justify-between gap-3 rounded-md border border-border p-3"

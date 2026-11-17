@@ -5,7 +5,10 @@ import { Download } from 'lucide-react';
 import { apiFetchFile } from '@/services/api';
 import { ImportType } from '@/types/api';
 import { Button } from '@/components/ui/button';
+import { InlineLoader } from '@/components/ui/loading';
+import { toast } from '@/components/ui/toast';
 import { downloadApiFile } from '@/lib/download';
+import { userMessageFor } from '@/lib/api-errors';
 
 export interface DownloadTemplateButtonProps {
   type: ImportType;
@@ -28,28 +31,24 @@ export function DownloadTemplateButton({
   size = 'sm',
 }: DownloadTemplateButtonProps) {
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const download = async () => {
     setPending(true);
-    setError(null);
     try {
       const file = await apiFetchFile(`/pharmacy/imports/templates/${type}?format=${format}`);
       downloadApiFile(file);
+      toast.success(`${file.filename} downloaded.`);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to download the template.');
+      toast.error(userMessageFor(cause, 'Unable to download the template. Please try again.'));
     } finally {
       setPending(false);
     }
   };
 
   return (
-    <div>
-      <Button variant={variant} size={size} onClick={download} disabled={pending}>
-        <Download className="mr-2 h-4 w-4" aria-hidden="true" />
-        {pending ? 'Preparing…' : label}
-      </Button>
-      {error ? <p className="mt-1 text-xs text-danger">{error}</p> : null}
-    </div>
+    <Button variant={variant} size={size} onClick={download} disabled={pending}>
+      <Download className="mr-2 h-4 w-4" aria-hidden="true" />
+      {pending ? <InlineLoader label="Preparing…" /> : label}
+    </Button>
   );
 }

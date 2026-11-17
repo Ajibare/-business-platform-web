@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { AuthCard } from '@/components/auth/auth-card';
 import { AuthLayout } from '@/components/layouts/auth-layout';
+import { PageLoader } from '@/components/ui/loading';
 import { VerifyContactForm } from '@/features/auth/verify-contact-form';
 
 export const metadata: Metadata = {
@@ -17,7 +18,9 @@ export default function VerifyContactPage() {
         title="Verify your email"
         description="Enter the six-digit code we sent when you registered. The workspace is only created once this address is confirmed."
       >
-        <Suspense fallback={<div className="h-72 animate-pulse rounded-md bg-slate-100" />}>
+        <Suspense
+          fallback={<PageLoader className="min-h-[18rem] py-0" label="Loading verification…" />}
+        >
           <VerifyContactForm />
         </Suspense>
       </AuthCard>

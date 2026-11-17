@@ -13,6 +13,7 @@ import { PasswordInput } from '@/components/auth/password-input';
 import { PasswordStrengthIndicator } from '@/components/auth/password-strength-indicator';
 import { VerificationCodeInput } from '@/components/auth/verification-code-input';
 import { useAuth } from '@/hooks/use-auth';
+import { NETWORK_ERROR_MESSAGE, fieldIssuesFor, userMessageFor } from '@/lib/api-errors';
 import { RegisterValues, registerSchema } from '@/lib/auth-validation';
 import { ApiError } from '@/services/api';
 import { authApi } from '@/services/auth';
@@ -21,6 +22,25 @@ import type { RegistrationChallenge } from '@/types/auth';
 /** Wording fixed by the product brief; it explains what the account becomes. */
 const OWNER_EXPLANATION =
   'You will become the Owner of your pharmacy workspace. Pharmacy Stock Intelligence helps you manage inventory and stock risks. It does not store patient information.';
+
+/** Shown for any 5xx: the server could not say what went wrong, and should not. */
+const REGISTRATION_FAILED_MESSAGE =
+  "We couldn't create your account right now. Please try again later.";
+
+const VERIFICATION_FAILED_MESSAGE =
+  "We couldn't create your workspace right now. Please try again later.";
+
+const RESEND_FAILED_MESSAGE = "We couldn't send a new code right now. Please try again later.";
+
+/** Inputs this form owns, so an API field message is never dropped silently. */
+const REGISTER_FIELDS = new Set<keyof RegisterValues>([
+  'name',
+  'email',
+  'phone',
+  'password',
+  'confirmPassword',
+  'termsAccepted',
+]);
 
 type Step = 'details' | 'verify';
 
@@ -77,6 +97,21 @@ export function SignUpFlow() {
     setResendIn(next.resendAvailableInSeconds);
   };
 
+  /**
+   * Marks every input the API rejected. Returns false when none of the fields it
+   * reported belong to this form, so the caller can fall back to a form-level
+   * message instead of swallowing the failure.
+   */
+  const applyFieldErrors = (error: ApiError): boolean => {
+    let applied = 0;
+    for (const issue of fieldIssuesFor(error)) {
+      if (!REGISTER_FIELDS.has(issue.field as keyof RegisterValues)) continue;
+      setError(issue.field as keyof RegisterValues, { message: issue.message });
+      applied += 1;
+    }
+    return applied > 0;
+  };
+
   const onSubmitDetails = async (values: RegisterValues) => {
     setFormError(null);
     try {
@@ -92,7 +127,7 @@ export function SignUpFlow() {
       startVerification(result);
     } catch (error) {
       if (!(error instanceof ApiError)) {
-        setFormError('We could not reach the server. Check your connection and try again.');
+        setFormError(NETWORK_ERROR_MESSAGE);
         return;
       }
 
@@ -113,10 +148,8 @@ export function SignUpFlow() {
         return;
       }
 
-      if (error.field === 'email' || error.field === 'phone' || error.field === 'password') {
-        setError(error.field, { message: error.message });
-        return;
-      }
+      if (applyFieldErrors(error)) return;
+      // Older API builds report a duplicate contact by code only.
       if (error.code === 'EMAIL_IN_USE') {
         setError('email', { message: error.message });
         return;
@@ -125,7 +158,7 @@ export function SignUpFlow() {
         setError('phone', { message: error.message });
         return;
       }
-      setFormError(error.message);
+      setFormError(userMessageFor(error, REGISTRATION_FAILED_MESSAGE));
     }
   };
 
@@ -146,7 +179,7 @@ export function SignUpFlow() {
       router.replace(result.profile.nextPath);
     } catch (error) {
       if (!(error instanceof ApiError)) {
-        setCodeError('We could not reach the server. Check your connection and try again.');
+        setCodeError(NETWORK_ERROR_MESSAGE);
         return;
       }
       if (error.code === 'EMAIL_IN_USE' || error.code === 'PHONE_IN_USE') {
@@ -155,11 +188,12 @@ export function SignUpFlow() {
         setFormError(error.message);
         return;
       }
+      const message = userMessageFor(error, VERIFICATION_FAILED_MESSAGE);
       const remaining = error.detailNumber('attemptsRemaining');
       setCodeError(
         remaining !== undefined
-          ? `${error.message} ${remaining} ${remaining === 1 ? 'attempt' : 'attempts'} left.`
-          : error.message,
+          ? `${message} ${remaining} ${remaining === 1 ? 'attempt' : 'attempts'} left.`
+          : message,
       );
       setCode(trimmed);
       if (
@@ -188,9 +222,9 @@ export function SignUpFlow() {
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.retryAfterSeconds) setResendIn(error.retryAfterSeconds);
-        setFormError(error.message);
+        setFormError(userMessageFor(error, RESEND_FAILED_MESSAGE));
       } else {
-        setFormError('We could not send a new code. Check your connection and try again.');
+        setFormError(NETWORK_ERROR_MESSAGE);
       }
     } finally {
       setIsResending(false);
@@ -211,6 +245,17 @@ export function SignUpFlow() {
             it below to create your workspace.
           </p>
         </div>
+
+        {challenge?.devCode ? (
+          <div className="rounded-md border border-dashed border-border bg-background p-3 text-sm leading-6 text-slate">
+            <p className="font-medium text-ink">Local development only</p>
+            <p className="mt-1">
+              The API is not sending email while <code className="font-mono">EMAIL_TRANSPORT=log</code>.
+              Use the code{' '}
+              <span className="font-mono font-semibold text-ink">{challenge.devCode}</span>.
+            </p>
+          </div>
+        ) : null}
 
         <VerificationCodeInput
           value={code}

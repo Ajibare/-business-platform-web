@@ -7,7 +7,7 @@ import { DashboardSummary } from '@/types/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
+import { SectionLoader } from '@/components/ui/loading';
 
 const summaryCards = [
   {
@@ -43,22 +43,16 @@ const summaryCards = [
 export function PharmacyDashboard() {
   const { data, isLoading, error, refetch } = useQuery<DashboardSummary>({
     queryKey: ['pharmacy', 'dashboard'],
+    // The failure replaces the whole dashboard and offers a retry.
+    meta: { silent: true },
     queryFn: () => apiFetch<DashboardSummary>('/pharmacy/reports/dashboard'),
   });
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {[0, 1, 2, 3].map((index) => (
-            <Card key={index} className="p-4">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="mt-4 h-8 w-16" />
-              <Skeleton className="mt-4 h-3 w-full" />
-            </Card>
-          ))}
-        </div>
-      </div>
+      <Card className="p-4">
+        <SectionLoader label="Loading stock risk…" />
+      </Card>
     );
   }
 

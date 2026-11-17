@@ -1,5 +1,6 @@
 import { clearSessionHint, markSessionActive } from '@/lib/session-hint';
 import { clearExpiryAlertHints } from '@/lib/expiry-popup';
+import { branchHeader } from '@/lib/branch-selection';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 const API_ROOT = `${API_BASE_URL}/api/v1`;
@@ -11,6 +12,18 @@ export const PROFILE_KEY = 'authProfile';
 /** Fired when the session cannot be renewed, so the UI can send the user to sign in. */
 export const SESSION_EXPIRED_EVENT = 'psi:session-expired';
 
+/** A validation failure reported against one request field. */
+export interface ApiFieldIssue {
+  field: string;
+  message: string;
+}
+
+/**
+ * `details` is either structured hints (`{ attemptsRemaining: 4 }`) or, for a
+ * validation failure, one entry per rejected field.
+ */
+export type ApiErrorDetails = Record<string, unknown> | ApiFieldIssue[];
+
 export interface ApiErrorBody {
   statusCode?: number;
   error?: string;
@@ -18,17 +31,20 @@ export interface ApiErrorBody {
   message?: string;
   /** Which form field the message belongs to, when the API knows. */
   field?: string;
-  /** Structured, non-secret hints such as `{ attemptsRemaining: 4 }`. */
-  details?: Record<string, unknown>;
+  /** Structured, non-secret hints or the per-field issue list. */
+  details?: ApiErrorDetails;
   retryAfterSeconds?: number;
+  /** Correlation id echoed by the API; quote it when reporting a failure. */
+  requestId?: string;
 }
 
 export class ApiError extends Error {
   readonly code?: string;
   readonly statusCode?: number;
   readonly field?: string;
-  readonly details?: Record<string, unknown>;
+  readonly details?: ApiErrorDetails;
   readonly retryAfterSeconds?: number;
+  readonly requestId?: string;
 
   constructor(message: string, body: ApiErrorBody = {}) {
     super(message);
@@ -38,12 +54,31 @@ export class ApiError extends Error {
     this.field = body.field;
     this.details = body.details;
     this.retryAfterSeconds = body.retryAfterSeconds;
+    this.requestId = body.requestId;
+  }
+
+  /** The per-field issue list, when the API rejected individual inputs. */
+  get fieldIssues(): ApiFieldIssue[] {
+    return Array.isArray(this.details) ? this.details : [];
   }
 
   /** Reads a numeric hint out of `details`, for example `attemptsRemaining`. */
   detailNumber(key: string): number | undefined {
-    const value = this.details?.[key];
+    const details = this.detailObject();
+    const value = details?.[key];
     return typeof value === 'number' ? value : undefined;
+  }
+
+  /** Reads a string list out of `details`, for example a rejected password's rules. */
+  detailStrings(key: string): string[] {
+    const value = this.detailObject()?.[key];
+    return Array.isArray(value)
+      ? value.filter((entry): entry is string => typeof entry === 'string')
+      : [];
+  }
+
+  private detailObject(): Record<string, unknown> | undefined {
+    return this.details && !Array.isArray(this.details) ? this.details : undefined;
   }
 }
 
@@ -100,17 +135,34 @@ function shouldAttemptRefresh(path: string): boolean {
   return !NO_REFRESH_PREFIXES.some((prefix) => path.startsWith(prefix));
 }
 
+/**
+ * Shown when the request never reached the API: offline, DNS failure, the API
+ * process being down, or an invalid certificate. One sentence, same everywhere.
+ */
+export const NETWORK_ERROR_MESSAGE =
+  'We could not reach the server. Check your connection and try again.';
+
 async function send(path: string, init: RequestInit, anonymous: boolean): Promise<Response> {
   const accessToken = anonymous ? null : readAccessToken();
-  return fetch(`${API_ROOT}${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      ...(init.headers ?? {}),
-    },
-    credentials: 'include',
-  });
+  // The branch is a hint the API validates, never an authority of its own.
+  const branch = anonymous ? null : branchHeader();
+  try {
+    return await fetch(`${API_ROOT}${path}`, {
+      ...init,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...(branch ? { 'X-Branch-Id': branch } : {}),
+        ...(init.headers ?? {}),
+      },
+      credentials: 'include',
+    });
+  } catch {
+    // `fetch` only rejects when no response was received. Wrapping it here means
+    // every caller handles one error type and the UI never prints
+    // `TypeError: Failed to fetch`.
+    throw new ApiError(NETWORK_ERROR_MESSAGE, { code: 'NETWORK_ERROR' });
+  }
 }
 
 let refreshInFlight: Promise<string | null> | null = null;

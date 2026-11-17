@@ -7,12 +7,13 @@ import { apiFetch } from '@/services/api';
 import { Sale, StockOnHand } from '@/types/api';
 import { useAuth } from '@/hooks/use-auth';
 import { formatCurrency, formatDateTime } from '@/lib/format';
-import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
+import { InlineLoader, SectionLoader } from '@/components/ui/loading';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { toast } from '@/components/ui/toast';
 
 interface CartLine {
   key: string;
@@ -23,11 +24,6 @@ interface CartLine {
   quantity: string;
   unitPrice: string;
   discount: string;
-}
-
-interface SaleListResponse {
-  data: Sale[];
-  meta: { total: number; limit: number; offset: number };
 }
 
 function randomKey(prefix: string): string {
@@ -70,23 +66,33 @@ export function RecordSale() {
   const [customerName, setCustomerName] = useState('');
   const [note, setNote] = useState('');
   const [idempotencyKey, setIdempotencyKey] = useState(() => randomKey('sale'));
-  const [lastSale, setLastSale] = useState<Sale | null>(null);
   const [returnFor, setReturnFor] = useState<string | null>(null);
   const [returnQuantities, setReturnQuantities] = useState<Record<string, string>>({});
   const [returnReason, setReturnReason] = useState('');
 
   const stock = useQuery<StockOnHand[]>({
     queryKey: ['pharmacy', 'inventory', 'stock'],
+    // Both failures are printed in place, next to the list they belong to.
+    meta: { silent: true },
     queryFn: () => apiFetch<StockOnHand[]>('/pharmacy/inventory/stock?limit=200'),
   });
 
-  const sales = useQuery<SaleListResponse>({
+  // `apiFetch` already unwraps the API envelope, so this is the sale list
+  // itself, not `{ data, meta }`. Reading `meta` here threw on first render.
+  const sales = useQuery<Sale[]>({
     queryKey: ['pharmacy', 'sales', 'recent'],
-    queryFn: () => apiFetch<SaleListResponse>('/pharmacy/sales?limit=20'),
+    meta: { silent: true },
+    queryFn: () => apiFetch<Sale[]>('/pharmacy/sales?limit=20'),
   });
 
   const stockById = useMemo(
     () => new Map((stock.data ?? []).map((item) => [item.productId, item])),
+    [stock.data],
+  );
+
+  // Only unexpired stock can be sold, so nothing else belongs in the picker.
+  const sellable = useMemo(
+    () => (stock.data ?? []).filter((item) => item.sellableQuantity > 0),
     [stock.data],
   );
 
@@ -165,6 +171,7 @@ export function RecordSale() {
   const canSubmit = lines.length > 0 && lineErrors.size === 0;
 
   const createSale = useMutation({
+    meta: { errorMessage: 'The sale was not recorded. Please try again.' },
     mutationFn: async () => {
       const payload = {
         idempotencyKey,
@@ -183,7 +190,10 @@ export function RecordSale() {
       });
     },
     onSuccess: (sale) => {
-      setLastSale(sale);
+      // The reference is what the customer is given, so it belongs in the popup.
+      toast.success(
+        `Sale ${sale.reference} recorded: ${sale.unitCount} unit(s), ${formatCurrency(sale.revenue)}.`,
+      );
       setLines([]);
       setCustomerName('');
       setNote('');
@@ -193,6 +203,7 @@ export function RecordSale() {
   });
 
   const voidSale = useMutation({
+    meta: { successMessage: 'Sale voided. Stock has been returned to the shelves.' },
     mutationFn: (saleId: string) =>
       apiFetch<Sale>(`/pharmacy/sales/${saleId}/void`, {
         method: 'POST',
@@ -205,6 +216,10 @@ export function RecordSale() {
   });
 
   const recordReturn = useMutation({
+    meta: {
+      successMessage: 'Return recorded successfully.',
+      errorMessage: 'The return was not recorded. Please try again.',
+    },
     mutationFn: (sale: Sale) => {
       const items = sale.lines
         .map((line) => ({ saleLineId: line.id, quantity: toNumber(returnQuantities[line.id] ?? '') }))
@@ -250,52 +265,27 @@ export function RecordSale() {
         </p>
       </div>
 
-      {lastSale ? (
-        <Alert tone="success" title={`Sale ${lastSale.reference} recorded`}>
-          <p>
-            {lastSale.unitCount} unit(s) for {formatCurrency(lastSale.revenue)}.
-          </p>
-          <ul className="mt-2 space-y-1 text-xs">
-            {lastSale.lines.map((line) => (
-              <li key={line.id}>
-                {line.medicineName} · batch {line.batchNumber ?? '—'} · {line.quantity} ×{' '}
-                {formatCurrency(line.unitPrice)}
-              </li>
-            ))}
-          </ul>
-        </Alert>
-      ) : null}
-
-      {createSale.error ? (
-        <Alert tone="danger" title="The sale was not recorded">
-          {createSale.error instanceof Error
-            ? createSale.error.message
-            : 'Please review the sale and try again.'}
-        </Alert>
-      ) : null}
-
       <Card className="p-4">
         <div className="flex flex-wrap items-end gap-2">
-          <label className="min-w-[16rem] flex-1 text-xs">
-            <span className="mb-1 block font-medium text-ink">Add a medicine</span>
-            <Select
+          <div className="min-w-[16rem] flex-1">
+            <SearchableSelect
+              label="Add a medicine"
               value={selectedProduct}
-              onChange={(event) => {
-                setSelectedProduct(event.target.value);
-                if (event.target.value) addProduct(event.target.value);
+              onChange={(next) => {
+                setSelectedProduct(next);
+                if (next) addProduct(next);
               }}
-              aria-label="Add a medicine to the sale"
-            >
-              <option value="">Select a medicine with stock</option>
-              {(stock.data ?? [])
-                .filter((item) => item.sellableQuantity > 0)
-                .map((item) => (
-                  <option key={item.productId} value={item.productId}>
-                    {item.name} · {item.sellableQuantity} {item.unit} available
-                  </option>
-                ))}
-            </Select>
-          </label>
+              options={sellable.map((item) => ({
+                value: item.productId,
+                label: item.name,
+                description: `${item.sellableQuantity} ${item.unit} available`,
+              }))}
+              placeholder="Select a medicine with stock"
+              searchPlaceholder="Search medicines by name…"
+              emptyMessage="No medicine with sellable stock matches that search."
+              loading={stock.isLoading}
+            />
+          </div>
           <Button
             variant="outline"
             onClick={() => selectedProduct && addProduct(selectedProduct)}
@@ -306,13 +296,15 @@ export function RecordSale() {
           </Button>
         </div>
 
-        {stock.isLoading ? <p className="mt-3 text-xs text-slate">Loading stock…</p> : null}
+        {stock.isLoading ? (
+          <SectionLoader label="Loading stock…" className="py-4" />
+        ) : null}
         {stock.error ? (
           <p className="mt-3 text-xs text-danger">
             {stock.error instanceof Error ? stock.error.message : 'Unable to load stock.'}
           </p>
         ) : null}
-        {!stock.isLoading && !stock.error && (stock.data ?? []).every((item) => item.sellableQuantity <= 0) ? (
+        {!stock.isLoading && !stock.error && sellable.length === 0 ? (
           <p className="mt-3 text-xs text-slate">
             No unexpired stock is available to sell yet. Record a stock receipt or add medicines
             first.
@@ -434,7 +426,7 @@ export function RecordSale() {
               Clear
             </Button>
             <Button onClick={() => createSale.mutate()} disabled={!canSubmit || createSale.isPending}>
-              {createSale.isPending ? 'Recording…' : 'Record sale'}
+              {createSale.isPending ? <InlineLoader label="Recording…" /> : 'Record sale'}
             </Button>
           </div>
         </div>
@@ -443,21 +435,25 @@ export function RecordSale() {
       <Card className="p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-ink">Recent sales</h2>
-          {sales.data ? <p className="text-xs text-slate">{sales.data.meta.total} recorded</p> : null}
+          {sales.data && sales.data.length > 0 ? (
+            <p className="text-xs text-slate">{sales.data.length} most recent</p>
+          ) : null}
         </div>
 
-        {sales.isLoading ? <p className="mt-3 text-xs text-slate">Loading sales…</p> : null}
+        {sales.isLoading ? (
+          <SectionLoader label="Loading recent sales…" className="py-4" />
+        ) : null}
         {sales.error ? (
           <p className="mt-3 text-xs text-danger">
             {sales.error instanceof Error ? sales.error.message : 'Unable to load sales.'}
           </p>
         ) : null}
-        {sales.data && sales.data.data.length === 0 ? (
+        {sales.data && sales.data.length === 0 ? (
           <p className="mt-3 text-xs text-slate">No sales recorded yet.</p>
         ) : null}
 
         <ul className="mt-3 space-y-2">
-          {(sales.data?.data ?? []).map((sale) => (
+          {(sales.data ?? []).map((sale) => (
             <li key={sale.id} className="rounded-md border border-border p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
@@ -548,20 +544,13 @@ export function RecordSale() {
                       onChange={(event) => setReturnReason(event.target.value)}
                     />
                   </label>
-                  {recordReturn.error ? (
-                    <p className="mt-2 text-xs text-danger">
-                      {recordReturn.error instanceof Error
-                        ? recordReturn.error.message
-                        : 'Unable to record the return.'}
-                    </p>
-                  ) : null}
                   <div className="mt-3 flex items-center gap-2">
                     <Button
                       size="sm"
                       disabled={returnCount <= 0 || recordReturn.isPending}
                       onClick={() => recordReturn.mutate(sale)}
                     >
-                      {recordReturn.isPending ? 'Saving…' : 'Confirm return'}
+                      {recordReturn.isPending ? <InlineLoader label="Saving…" /> : 'Confirm return'}
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => setReturnFor(null)}>
                       Cancel

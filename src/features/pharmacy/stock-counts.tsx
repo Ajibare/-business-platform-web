@@ -8,14 +8,18 @@ import { StockCount, StockCountLine } from '@/types/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { InlineLoader } from '@/components/ui/loading';
 
 export function StockCounts() {
   const queryClient = useQueryClient();
   const [count, setCount] = useState<StockCount | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, number>>({});
 
   const startCount = useMutation({
+    meta: {
+      successMessage: 'Stock count started.',
+      errorMessage: 'Unable to start the stock count. Please try again.',
+    },
     mutationFn: async () => {
       const created = await apiFetch<StockCount>('/pharmacy/counts', {
         method: 'POST',
@@ -25,14 +29,14 @@ export function StockCounts() {
     },
     onSuccess: (created) => {
       setCount(created);
-      setError(null);
-    },
-    onError: (err: Error) => {
-      setError(err.message || 'Unable to start stock count');
     },
   });
 
   const saveLine = useMutation({
+    meta: {
+      successMessage: 'Counted quantity saved.',
+      errorMessage: 'Unable to save that count. Please try again.',
+    },
     mutationFn: async (line: StockCountLine) => {
       if (!count) return line;
       return apiFetch<StockCountLine>(`/pharmacy/counts/${count.id}/lines`, {
@@ -57,6 +61,10 @@ export function StockCounts() {
   });
 
   const submitCount = useMutation({
+    meta: {
+      successMessage: 'Stock count submitted for approval.',
+      errorMessage: 'Unable to submit the stock count. Please try again.',
+    },
     mutationFn: async () => {
       if (!count) return null;
       return apiFetch<StockCount>(`/pharmacy/counts/${count.id}/submit`, {
@@ -70,6 +78,10 @@ export function StockCounts() {
   });
 
   const approveCount = useMutation({
+    meta: {
+      successMessage: 'Stock count approved. Balances were adjusted.',
+      errorMessage: 'Unable to approve the stock count. Please try again.',
+    },
     mutationFn: async () => {
       if (!count) return null;
       return apiFetch<StockCount>(`/pharmacy/counts/${count.id}/approve`, {
@@ -100,16 +112,9 @@ export function StockCounts() {
         </div>
         <Button onClick={() => startCount.mutate()} disabled={startCount.isPending}>
           <ClipboardCheck className="mr-2 h-4 w-4" aria-hidden="true" />
-          Start stock count
+          {startCount.isPending ? <InlineLoader label="Starting count…" /> : 'Start stock count'}
         </Button>
       </div>
-
-      {error ? (
-        <Card className="p-6">
-          <h2 className="text-lg font-semibold text-ink">Unable to start stock count</h2>
-          <p className="mt-2 text-sm text-slate">{error}</p>
-        </Card>
-      ) : null}
 
       {count ? (
         <Card className="p-6">
@@ -146,7 +151,11 @@ export function StockCounts() {
                     onClick={() => handleSaveLine(line)}
                     disabled={saveLine.isPending}
                   >
-                    Save
+                    {saveLine.isPending && saveLine.variables?.id === line.id ? (
+                      <InlineLoader label="Saving…" />
+                    ) : (
+                      'Save'
+                    )}
                   </Button>
                 </div>
               </div>
@@ -158,13 +167,13 @@ export function StockCounts() {
               onClick={() => submitCount.mutate()}
               disabled={submitCount.isPending || count.status !== 'DRAFT'}
             >
-              Submit count
+              {submitCount.isPending ? <InlineLoader label="Submitting…" /> : 'Submit count'}
             </Button>
             <Button
               onClick={() => approveCount.mutate()}
               disabled={approveCount.isPending || count.status !== 'SUBMITTED'}
             >
-              Approve count
+              {approveCount.isPending ? <InlineLoader label="Approving…" /> : 'Approve count'}
             </Button>
           </div>
         </Card>

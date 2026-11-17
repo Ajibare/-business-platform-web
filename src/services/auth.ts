@@ -11,6 +11,7 @@ import type {
   RegisterInput,
   RegistrationChallenge,
   ResendResult,
+  ResentInvitation,
   SignInInput,
   StaffInvitation,
   StockSettingsInput,
@@ -97,11 +98,21 @@ export const authApi = {
 };
 
 export const invitationApi = {
-  create(input: { email: string; phone?: string; role: InvitableRole }): Promise<CreatedInvitation> {
+  create(input: {
+    email: string;
+    phone?: string;
+    role: InvitableRole;
+    branchIds?: string[];
+  }): Promise<CreatedInvitation> {
     return apiFetch<CreatedInvitation>('/invitations', {
       method: 'POST',
       body: JSON.stringify(input),
     });
+  },
+
+  /** Sends a fresh link for a pending invitation and retires the old one. */
+  resend(id: string): Promise<ResentInvitation> {
+    return apiFetch<ResentInvitation>(`/invitations/${id}/resend`, { method: 'POST' });
   },
 
   list(): Promise<StaffInvitation[]> {

@@ -14,7 +14,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
+import { InlineLoader } from '@/components/ui/loading';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { toast } from '@/components/ui/toast';
 
 interface RowDraft {
   id: string;
@@ -127,7 +129,10 @@ export function BulkMedicines() {
 
   const suppliers = useQuery<Supplier[]>({
     queryKey: ['pharmacy', 'suppliers'],
-    queryFn: () => apiFetch<Supplier[]>('/pharmacy/suppliers'),
+    // The supplier field simply stays empty; a popup would interrupt a form that
+    // can still be completed without it.
+    meta: { silent: true },
+    queryFn: () => apiFetch<Supplier[]>('/pharmacy/suppliers?limit=100'),
   });
 
   const errors = useMemo(() => {
@@ -142,6 +147,10 @@ export function BulkMedicines() {
   const invalidRows = filledRows.filter((row) => Object.keys(errors.get(row.id) ?? {}).length > 0);
 
   const save = useMutation({
+    // The result card lists every row the API rejected, so the partial outcome is
+    // announced here with the counts. A request that failed outright is announced
+    // by the shared cache from `errorMessage`.
+    meta: { errorMessage: 'Failed to create the medicine. Please try again.' },
     mutationFn: (payload: BulkMedicineRowInput[]) =>
       apiFetch<BulkMedicineResult>('/pharmacy/medicines/bulk', {
         method: 'POST',
@@ -151,6 +160,17 @@ export function BulkMedicines() {
       setResult(saved);
       setError(null);
       setSubmitAttempted(false);
+      if (saved.failed > 0) {
+        toast.error(
+          `${saved.failed} of ${saved.rows.length} medicine(s) were not saved. Fix the rows below and save again.`,
+        );
+      } else {
+        toast.success(
+          saved.created === saved.rows.length
+            ? 'Medicine(s) created successfully.'
+            : 'Medicines saved successfully.',
+        );
+      }
       // Keep only the rows that failed so they can be corrected and resubmitted.
       const failedIndices = new Set(
         saved.rows.filter((row) => row.status === 'FAILED').map((row) => row.row - 1),
@@ -159,7 +179,6 @@ export function BulkMedicines() {
       setRows(remaining.length > 0 ? remaining : [emptyRow()]);
       queryClient.invalidateQueries({ queryKey: ['pharmacy'] });
     },
-    onError: (cause: Error) => setError(cause.message),
   });
 
   const dirty = filledRows.length > 0;
@@ -371,20 +390,21 @@ export function BulkMedicines() {
                 {field(row, 'quantity', 'Quantity', { type: 'number' })}
                 {field(row, 'unitCost', 'Purchase price', { type: 'number' })}
                 {field(row, 'sellingPrice', 'Selling price', { type: 'number' })}
-                <label className="block text-xs">
-                  <span className="mb-1 block font-medium text-ink">Supplier</span>
-                  <Select
-                    value={row.supplierId}
-                    onChange={(event) => update(row.id, 'supplierId', event.target.value)}
-                  >
-                    <option value="">No supplier</option>
-                    {(suppliers.data ?? []).map((supplier) => (
-                      <option key={supplier.id} value={supplier.id}>
-                        {supplier.name}
-                      </option>
-                    ))}
-                  </Select>
-                </label>
+                <SearchableSelect
+                  label="Supplier"
+                  value={row.supplierId}
+                  onChange={(next) => update(row.id, 'supplierId', next)}
+                  options={(suppliers.data ?? []).map((supplier) => ({
+                    value: supplier.id,
+                    label: supplier.name,
+                    description: supplier.phone ?? supplier.email ?? undefined,
+                  }))}
+                  placeholder="No supplier"
+                  searchPlaceholder="Search suppliers…"
+                  emptyMessage="No supplier matches that search. Add one on the Suppliers page."
+                  loading={suppliers.isLoading}
+                  clearable
+                />
               </div>
             </Card>
           );
@@ -398,7 +418,7 @@ export function BulkMedicines() {
         </Button>
         <Button onClick={submit} disabled={save.isPending}>
           <PackagePlus className="mr-2 h-4 w-4" aria-hidden="true" />
-          {save.isPending ? 'Saving…' : `Save ${filledRows.length || ''} medicine(s)`}
+          {save.isPending ? <InlineLoader label="Saving…" /> : `Save ${filledRows.length || ''} medicine(s)`}
         </Button>
         {invalidRows.length > 0 && submitAttempted ? (
           <span className="text-xs text-danger">

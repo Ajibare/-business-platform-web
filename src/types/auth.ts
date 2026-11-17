@@ -5,9 +5,19 @@
  * other.
  */
 
-export type Role = 'OWNER' | 'MANAGER' | 'INVENTORY_STAFF' | 'READ_ONLY';
+export type Role =
+  | 'OWNER'
+  | 'ADMIN'
+  | 'BRANCH_MANAGER'
+  | 'PHARMACIST'
+  | 'INVENTORY_OFFICER'
+  | 'CASHIER'
+  | 'MANAGER'
+  | 'INVENTORY_STAFF'
+  | 'READ_ONLY';
 export type InvitableRole = Exclude<Role, 'OWNER'>;
-export type UserStatus = 'ACTIVE' | 'DEACTIVATED';
+export type UserStatus = 'ACTIVE' | 'DEACTIVATED' | 'SUSPENDED';
+export type MembershipStatus = 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED';
 export type InvitationStatus = 'PENDING' | 'ACCEPTED' | 'REVOKED' | 'EXPIRED';
 export type StockStartOption = 'IMPORT' | 'MANUAL' | 'SAMPLE' | 'EMPTY';
 export type OnboardingStatus = 'IN_PROGRESS' | 'COMPLETED';
@@ -24,10 +34,27 @@ export type OutletProfile = (typeof OUTLET_PROFILES)[number];
 
 export const ROLE_LABELS: Record<Role, string> = {
   OWNER: 'Owner',
-  MANAGER: 'Manager',
-  INVENTORY_STAFF: 'Inventory staff',
+  ADMIN: 'Admin',
+  BRANCH_MANAGER: 'Branch manager',
+  PHARMACIST: 'Pharmacist',
+  INVENTORY_OFFICER: 'Inventory officer',
+  CASHIER: 'Cashier',
+  MANAGER: 'Manager (legacy)',
+  INVENTORY_STAFF: 'Inventory staff (legacy)',
   READ_ONLY: 'Read-only',
 };
+
+/** The roles offered when inviting or editing staff, in display order. */
+export const STAFF_ROLES: Role[] = [
+  'ADMIN',
+  'BRANCH_MANAGER',
+  'PHARMACIST',
+  'INVENTORY_OFFICER',
+  'CASHIER',
+  'MANAGER',
+  'INVENTORY_STAFF',
+  'READ_ONLY',
+];
 
 export interface AuthUser {
   id: string;
@@ -84,10 +111,21 @@ export interface OnboardingSummary {
   completedAt: string | null;
 }
 
+export interface AuthBranch {
+  id: string;
+  name: string;
+  code: string;
+  isDefault: boolean;
+}
+
 export interface AuthProfile {
   user: AuthUser;
   organisation: AuthOrganisation;
-  membership: { role: Role; active: boolean };
+  membership: { role: Role; active: boolean; status: MembershipStatus };
+  /** Permission keys the member holds; the interface is built from these. */
+  permissions: string[];
+  /** Branches the member may work in. */
+  branches: AuthBranch[];
   onboarding: OnboardingSummary;
   /** Where the client should land after sign-in. */
   nextPath: string;
@@ -144,6 +182,7 @@ export interface InvitationPreview {
   phone: string | null;
   hasAccount: boolean;
   expiresAt: string;
+  branchNames: string[];
 }
 
 export interface StaffInvitation {
@@ -154,6 +193,10 @@ export interface StaffInvitation {
   status: InvitationStatus;
   expiresAt: string;
   acceptedAt: string | null;
+  branchIds: string[];
+  branchNames: string[];
+  resendCount: number;
+  lastSentAt: string | null;
   createdAt: string;
 }
 
@@ -165,7 +208,17 @@ export interface CreatedInvitation {
   status: InvitationStatus;
   expiresAt: string;
   delivered: boolean;
+  branchIds: string[];
   /** Non-production only: lets the invite flow be tested without a mailbox. */
+  devInviteUrl?: string;
+}
+
+export interface ResentInvitation {
+  id: string;
+  email: string | null;
+  expiresAt: string;
+  delivered: boolean;
+  /** Non-production only: the fresh link, when the API logs email instead. */
   devInviteUrl?: string;
 }
 

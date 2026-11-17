@@ -2,7 +2,7 @@
 
 import { ImportColumnSchema } from '@/types/api';
 import { Badge } from '@/components/ui/badge';
-import { Select } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 
 export interface ColumnMappingTableProps {
   columns: ImportColumnSchema[];
@@ -48,19 +48,19 @@ export function ColumnMappingTable({
                   </Badge>
                 </td>
                 <td className="py-2 pr-3">
-                  <Select
-                    aria-label={`Map ${column.header}`}
+                  <SearchableSelect
+                    ariaLabel={`Map ${column.header}`}
                     value={value}
                     disabled={disabled}
-                    onChange={(event) => onChange(column.key, event.target.value || null)}
-                  >
-                    <option value="">Not mapped</option>
-                    {headers.map((header) => (
-                      <option key={header} value={header}>
-                        {header}
-                      </option>
-                    ))}
-                  </Select>
+                    onChange={(next) => onChange(column.key, next || null)}
+                    options={[
+                      { value: '', label: 'Not mapped' },
+                      ...headers.map((header) => ({ value: header, label: header })),
+                    ]}
+                    placeholder="Not mapped"
+                    searchPlaceholder="Search file headers…"
+                    emptyMessage="No header in your file matches that search."
+                  />
                 </td>
               </tr>
             );

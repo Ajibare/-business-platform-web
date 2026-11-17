@@ -4,7 +4,7 @@ import { ReactNode, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { SIGN_IN } from '@/lib/route-guard';
-import { Skeleton } from '@/components/ui/skeleton';
+import { PageLoader } from '@/components/ui/loading';
 
 interface AuthGuardProps {
   children: ReactNode;
@@ -59,14 +59,7 @@ export function AuthGuard({ children, requireOnboardingComplete = true }: AuthGu
   }, [isLoading, isBlocked, accessToken, needsSetup, pathname, router, signOut]);
 
   if (isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background p-4">
-        <div className="w-full max-w-md space-y-3">
-          <Skeleton className="h-8 w-40" />
-          <Skeleton className="h-40 w-full" />
-        </div>
-      </div>
-    );
+    return <PageLoader className="min-h-screen bg-background" label="Checking your session…" />;
   }
 
   if (!accessToken || needsSetup || isBlocked) {

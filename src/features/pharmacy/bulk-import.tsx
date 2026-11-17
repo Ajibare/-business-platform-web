@@ -7,7 +7,7 @@ import { ImportJob } from '@/types/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
+import { InlineLoader, SectionLoader } from '@/components/ui/loading';
 import { ImportWizard } from '@/components/imports/import-wizard';
 import { formatDateTime } from '@/lib/format';
 
@@ -29,6 +29,8 @@ const statusBadge = (status: string) => {
 export function BulkImport() {
   const recent = useQuery<ImportJob[]>({
     queryKey: ['pharmacy', 'imports', 'recent'],
+    // The history list prints its own failure.
+    meta: { silent: true },
     queryFn: () => apiFetch<ImportJob[]>('/pharmacy/imports?limit=5'),
   });
 
@@ -50,18 +52,12 @@ export function BulkImport() {
       <Card className="p-6">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-semibold text-ink">Recent imports</h2>
-          <Button variant="outline" size="sm" onClick={() => recent.refetch()}>
-            Refresh
+          <Button variant="outline" size="sm" onClick={() => recent.refetch()} disabled={recent.isFetching}>
+            {recent.isFetching ? <InlineLoader label="Refreshing…" /> : 'Refresh'}
           </Button>
         </div>
 
-        {recent.isLoading ? (
-          <div className="mt-4 space-y-2">
-            {[0, 1].map((index) => (
-              <Skeleton key={index} className="h-14 w-full" />
-            ))}
-          </div>
-        ) : null}
+        {recent.isLoading ? <SectionLoader label="Loading import history…" /> : null}
 
         {recent.error ? (
           <p className="mt-4 text-sm text-danger">

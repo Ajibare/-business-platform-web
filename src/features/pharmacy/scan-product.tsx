@@ -9,7 +9,7 @@ import { BarcodeBatch, BarcodeLookup } from '@/types/api';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
+import { SectionLoader } from '@/components/ui/loading';
 import { AssignBarcodePanel } from '@/components/barcode/assign-barcode-panel';
 import { BarcodeInput } from '@/components/barcode/barcode-input';
 import { BarcodeScanner } from '@/components/barcode/barcode-scanner';
@@ -29,6 +29,8 @@ export function ScanProduct() {
   const lookup = useQuery<BarcodeLookup>({
     queryKey: ['pharmacy', 'barcode', code],
     queryFn: () => apiFetch<BarcodeLookup>(`/pharmacy/barcodes/lookup?code=${encodeURIComponent(code)}`),
+    // Not found and lookup failures are both explained beside the input.
+    meta: { silent: true },
     enabled: code.length > 0,
     retry: false,
   });
@@ -105,8 +107,7 @@ export function ScanProduct() {
 
       {lookup.isLoading && code ? (
         <Card className="p-6">
-          <Skeleton className="h-6 w-64" />
-          <Skeleton className="mt-4 h-20 w-full" />
+          <SectionLoader label={`Looking up ${code}…`} />
         </Card>
       ) : null}
 

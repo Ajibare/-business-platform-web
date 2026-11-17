@@ -7,16 +7,19 @@ import { DashboardSummary, LowStockItem } from '@/types/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
+import { SectionLoader } from '@/components/ui/loading';
 
 export function ReportsView() {
   const summary = useQuery<DashboardSummary>({
     queryKey: ['pharmacy', 'dashboard'],
+    meta: { silent: true },
     queryFn: () => apiFetch<DashboardSummary>('/pharmacy/reports/dashboard'),
   });
 
   const lowStock = useQuery<LowStockItem[]>({
     queryKey: ['pharmacy', 'low-stock'],
+    // Both cards print their own failure.
+    meta: { silent: true },
     queryFn: () => apiFetch<LowStockItem[]>('/pharmacy/reports/low-stock'),
   });
 
@@ -27,7 +30,11 @@ export function ReportsView() {
         <p className="text-sm text-slate">Low stock and inventory risk reports.</p>
       </div>
 
-      {summary.isLoading ? <Skeleton className="h-24 w-full" /> : null}
+      {summary.isLoading ? (
+        <Card className="p-4">
+          <SectionLoader label="Loading report summary…" className="py-6" />
+        </Card>
+      ) : null}
 
       {summary.data ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -59,13 +66,7 @@ export function ReportsView() {
           <Badge status="neutral">{lowStock.data?.length ?? 0} items</Badge>
         </div>
 
-        {lowStock.isLoading ? (
-          <div className="mt-4 space-y-2">
-            {[0, 1, 2].map((index) => (
-              <Skeleton key={index} className="h-14 w-full" />
-            ))}
-          </div>
-        ) : null}
+        {lowStock.isLoading ? <SectionLoader label="Loading low stock report…" /> : null}
 
         {lowStock.error ? (
           <div className="mt-4">

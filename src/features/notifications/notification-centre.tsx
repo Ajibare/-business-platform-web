@@ -14,7 +14,7 @@ import {
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
+import { InlineLoader, SectionLoader } from '@/components/ui/loading';
 import { NotificationList } from '@/components/notifications/notification-list';
 
 type Filter = 'all' | 'unread';
@@ -27,6 +27,8 @@ export function NotificationCentre() {
 
   const notifications = useQuery<AppNotification[]>({
     queryKey: ['notifications', 'list', filter],
+    // The list prints its own failure above the rows, retry included.
+    meta: { silent: true },
     queryFn: () =>
       apiFetch<AppNotification[]>(
         `/notifications?limit=100${filter === 'unread' ? '&unreadOnly=true' : ''}`,
@@ -36,11 +38,13 @@ export function NotificationCentre() {
 
   const capabilities = useQuery<NotificationCapabilities>({
     queryKey: ['notifications', 'capabilities'],
+    meta: { silent: true },
     queryFn: () => apiFetch<NotificationCapabilities>('/notifications/capabilities'),
   });
 
   const preferences = useQuery<NotificationPreferences>({
     queryKey: ['notifications', 'preferences'],
+    meta: { errorMessage: 'Unable to load your notification settings.' },
     queryFn: () => apiFetch<NotificationPreferences>('/notifications/preferences'),
   });
 
@@ -49,6 +53,9 @@ export function NotificationCentre() {
   };
 
   const markRead = useMutation({
+    // Every failure here is already printed above the list; the popup would be
+    // the same sentence twice.
+    meta: { successMessage: 'Notification marked as read.', silent: true },
     mutationFn: (id: string) =>
       apiFetch(`/notifications/${id}/read`, { method: 'POST' }),
     onSuccess: invalidate,
@@ -56,12 +63,14 @@ export function NotificationCentre() {
   });
 
   const markAllRead = useMutation({
+    meta: { successMessage: 'All notifications marked as read.', silent: true },
     mutationFn: () => apiFetch('/notifications/read-all', { method: 'POST' }),
     onSuccess: invalidate,
     onError: (error: Error) => setActionError(error.message),
   });
 
   const runScan = useMutation({
+    meta: { successMessage: 'Expiry scan completed.', silent: true },
     mutationFn: () => apiFetch<ExpiryScanSummary>('/notifications/expiry-scan', { method: 'POST' }),
     onSuccess: (summary) => {
       setScanSummary(summary);
@@ -90,8 +99,8 @@ export function NotificationCentre() {
             onClick={() => runScan.mutate()}
             disabled={runScan.isPending}
           >
-            <RefreshCw className={`mr-2 h-4 w-4 ${runScan.isPending ? 'animate-spin' : ''}`} aria-hidden="true" />
-            {runScan.isPending ? 'Scanning…' : 'Run expiry scan'}
+            <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
+            {runScan.isPending ? <InlineLoader label="Scanning…" /> : 'Run expiry scan'}
           </Button>
           <Link
             href="/notifications/settings"
@@ -178,18 +187,14 @@ export function NotificationCentre() {
               disabled={markAllRead.isPending}
             >
               <CheckCheck className="mr-1 h-3 w-3" aria-hidden="true" />
-              Mark all read
+              {markAllRead.isPending ? <InlineLoader label="Marking…" /> : 'Mark all read'}
             </Button>
           </div>
         </div>
 
         <div className="mt-4">
           {notifications.isLoading ? (
-            <div className="space-y-2">
-              {[0, 1, 2].map((index) => (
-                <Skeleton key={index} className="h-20 w-full" />
-              ))}
-            </div>
+            <SectionLoader label="Loading notifications…" />
           ) : null}
 
           {notifications.error ? (

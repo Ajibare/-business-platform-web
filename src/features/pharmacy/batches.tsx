@@ -9,7 +9,7 @@ import { Batch } from '@/types/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
+import { SectionLoader } from '@/components/ui/loading';
 
 export function Batches() {
   const searchParams = useSearchParams();
@@ -18,6 +18,8 @@ export function Batches() {
 
   const batches = useQuery<Batch[]>({
     queryKey: ['pharmacy', 'batches', productId],
+    // The table prints its own failure.
+    meta: { silent: true },
     queryFn: () =>
       apiFetch<Batch[]>(
         `/pharmacy/batches?limit=100${productId ? `&medicineId=${encodeURIComponent(productId)}` : ''}`,
@@ -51,13 +53,7 @@ export function Batches() {
           </div>
         </div>
 
-        {batches.isLoading ? (
-          <div className="mt-4 space-y-2">
-            {[0, 1, 2, 3].map((index) => (
-              <Skeleton key={index} className="h-14 w-full" />
-            ))}
-          </div>
-        ) : null}
+        {batches.isLoading ? <SectionLoader label="Loading batches…" /> : null}
 
         {batches.error ? (
           <div className="mt-4">

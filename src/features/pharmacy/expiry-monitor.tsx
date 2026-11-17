@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
+import { SectionLoader } from '@/components/ui/loading';
 import { formatCurrency, formatDate } from '@/lib/format';
 
 type PeriodFilter = 'ALL' | 'EXPIRED' | 'WITHIN_30' | 'WITHIN_60' | 'WITHIN_90';
@@ -51,6 +51,8 @@ export function ExpiryMonitor() {
 
   const alerts = useQuery<ExpiryAlerts>({
     queryKey: ['pharmacy', 'expiry', 'alerts', 90],
+    // Each table prints its own failure.
+    meta: { silent: true },
     queryFn: () => apiFetch<ExpiryAlerts>('/pharmacy/expiry/alerts?days=90'),
   });
 
@@ -148,13 +150,7 @@ export function ExpiryMonitor() {
           </span>
         </label>
 
-        {alerts.isLoading ? (
-          <div className="mt-4 space-y-2">
-            {[0, 1, 2].map((index) => (
-              <Skeleton key={index} className="h-14 w-full" />
-            ))}
-          </div>
-        ) : null}
+        {alerts.isLoading ? <SectionLoader label="Loading expiry alerts…" /> : null}
 
         {alerts.error ? (
           <div className="mt-4">
@@ -231,6 +227,7 @@ export function ExpiryMonitor() {
 function UnknownExpiryCard() {
   const unknown = useQuery<ExpiryBatch[]>({
     queryKey: ['pharmacy', 'expiry', 'unknown'],
+    meta: { silent: true },
     queryFn: () => apiFetch<ExpiryBatch[]>('/pharmacy/expiry/unknown'),
   });
 
@@ -246,11 +243,7 @@ function UnknownExpiryCard() {
       </p>
 
       {unknown.isLoading ? (
-        <div className="mt-4 space-y-2">
-          {[0, 1].map((index) => (
-            <Skeleton key={index} className="h-14 w-full" />
-          ))}
-        </div>
+        <SectionLoader label="Loading batches without expiry…" />
       ) : null}
 
       {unknown.error ? (

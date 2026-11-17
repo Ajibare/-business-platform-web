@@ -5,11 +5,12 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeftRight } from 'lucide-react';
 import { apiFetch } from '@/services/api';
 import { Movement } from '@/types/api';
-import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
+import { InlineLoader } from '@/components/ui/loading';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { toast } from '@/components/ui/toast';
 
 type MovementOption = {
   value: string;
@@ -51,7 +52,6 @@ export function MovementForm({
   const [quantity, setQuantity] = useState('');
   const [adjustmentDirection, setAdjustmentDirection] = useState<'increase' | 'decrease'>('decrease');
   const [reason, setReason] = useState('');
-  const [result, setResult] = useState<Movement | null>(null);
 
   const option = MOVEMENT_OPTIONS.find((item) => item.value === type) ?? MOVEMENT_OPTIONS[0];
   const parsedQuantity = Number(quantity);
@@ -59,6 +59,7 @@ export function MovementForm({
   const reasonRequired = type === 'ADJUSTMENT';
 
   const record = useMutation({
+    meta: { errorMessage: 'The movement was not recorded. Please try again.' },
     mutationFn: () => {
       const direction =
         option.direction === 0 ? (adjustmentDirection === 'increase' ? 1 : -1) : option.direction;
@@ -79,7 +80,9 @@ export function MovementForm({
       });
     },
     onSuccess: (movement) => {
-      setResult(movement);
+      // The confirmation belongs in the popup: the balance is the one number
+      // the user needs after a movement.
+      toast.success(`${option.label}: ${movement.balanceQuantity} ${unit} in stock.`);
       setQuantity('');
       setReason('');
       queryClient.invalidateQueries({ queryKey: ['pharmacy'] });
@@ -97,52 +100,26 @@ export function MovementForm({
         {batchLabel} · quantities are {unit}. Every movement is recorded in the stock ledger.
       </p>
 
-      {result ? (
-        <Alert tone="success" className="mt-4" title="Movement recorded">
-          {result.type.replace(/_/g, ' ')} of {result.quantityDelta > 0 ? '+' : ''}
-          {result.quantityDelta} {unit}. New recorded balance: {result.balanceQuantity} {unit}.
-        </Alert>
-      ) : null}
-
-      {record.error ? (
-        <Alert tone="danger" className="mt-4" title="Movement was not recorded">
-          {record.error instanceof Error ? record.error.message : 'Please try again.'}
-        </Alert>
-      ) : null}
-
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <label className="block text-sm">
-          <span className="font-medium text-ink">Movement type</span>
-          <Select
-            className="mt-1"
-            value={type}
-            onChange={(event) => {
-              setType(event.target.value);
-              setResult(null);
-            }}
-          >
-            {MOVEMENT_OPTIONS.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </Select>
-        </label>
+        <SearchableSelect
+          label="Movement type"
+          value={type}
+          onChange={(next) => setType(next)}
+          options={MOVEMENT_OPTIONS.map((item) => ({ value: item.value, label: item.label }))}
+          searchPlaceholder="Search movement types…"
+        />
 
         {option.direction === 0 ? (
-          <label className="block text-sm">
-            <span className="font-medium text-ink">Direction</span>
-            <Select
-              className="mt-1"
-              value={adjustmentDirection}
-              onChange={(event) =>
-                setAdjustmentDirection(event.target.value === 'increase' ? 'increase' : 'decrease')
-              }
-            >
-              <option value="decrease">Decrease recorded stock</option>
-              <option value="increase">Increase recorded stock</option>
-            </Select>
-          </label>
+          <SearchableSelect
+            label="Direction"
+            value={adjustmentDirection}
+            onChange={(next) => setAdjustmentDirection(next === 'increase' ? 'increase' : 'decrease')}
+            options={[
+              { value: 'decrease', label: 'Decrease recorded stock' },
+              { value: 'increase', label: 'Increase recorded stock' },
+            ]}
+            searchPlaceholder="Search directions…"
+          />
         ) : null}
 
         <label className="block text-sm">
@@ -176,7 +153,7 @@ export function MovementForm({
           onClick={() => record.mutate()}
           disabled={record.isPending || !quantityValid || (reasonRequired && !reason.trim())}
         >
-          {record.isPending ? 'Recording…' : 'Record movement'}
+          {record.isPending ? <InlineLoader label="Recording…" /> : 'Record movement'}
         </Button>
         {onCancel ? (
           <Button variant="outline" onClick={onCancel} disabled={record.isPending}>

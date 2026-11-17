@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Camera, CameraOff, Loader2 } from 'lucide-react';
+import { Camera, CameraOff } from 'lucide-react';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { InlineLoader } from '@/components/ui/loading';
 
 interface DetectedBarcode {
   rawValue: string;
@@ -200,8 +201,7 @@ export function BarcodeScanner({ onDetected, autoStart = false }: BarcodeScanner
         )}
         {starting ? (
           <span className="inline-flex items-center gap-1 text-xs text-slate">
-            <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-            Starting camera…
+            <InlineLoader label="Starting camera…" />
           </span>
         ) : null}
       </div>

@@ -18,18 +18,31 @@ export type ApiErrorCode =
   | 'NOT_FOUND'
   | 'FORBIDDEN'
   | 'CONFLICT'
+  | 'EMAIL_IN_USE'
+  | 'PHONE_IN_USE'
+  | 'WEAK_PASSWORD'
+  | 'PASSWORD_MISMATCH'
   | 'INSUFFICIENT_STOCK'
   | 'STALE_COUNT'
   | 'DUPLICATE_REQUEST'
   | 'IMPORT_ROW_ERRORS'
   | 'RATE_LIMITED'
-  | 'INTERNAL_ERROR';
+  | 'INTERNAL_ERROR'
+  | 'DATABASE_UNAVAILABLE'
+  /** Raised by the client, not the API: the request never got a response. */
+  | 'NETWORK_ERROR';
 
 export interface ErrorResponseBody {
   statusCode: number;
   error: string;
-  code: string;
+  code: ApiErrorCode | string;
   message: string;
+  /** Correlation id for the matching server log line. */
+  requestId?: string;
+  /** The input a field-level failure belongs to. */
+  field?: string;
+  /** Per-field messages for a validation failure, or structured hints. */
+  details?: Array<{ field: string; message: string }> | Record<string, unknown>;
 }
 
 export interface Medicine {

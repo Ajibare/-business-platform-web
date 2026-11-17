@@ -1,13 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Trash2 } from 'lucide-react';
 import { AuthInput } from '@/components/auth/auth-input';
-import { AuthErrorMessage, AuthSuccessMessage } from '@/components/auth/auth-message';
+import { AuthErrorMessage } from '@/components/auth/auth-message';
 import { AuthSubmitButton } from '@/components/auth/auth-submit-button';
-import { SelectField } from '@/components/onboarding/select-field';
+import { SectionLoader } from '@/components/ui/loading';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { toast } from '@/components/ui/toast';
 import { StaffInviteValues, staffInviteSchema } from '@/lib/auth-validation';
 import { ApiError } from '@/services/api';
 import { invitationApi } from '@/services/auth';
@@ -28,11 +30,11 @@ export function StaffInvitePanel() {
   const [invitations, setInvitations] = useState<StaffInvitation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [devInviteUrl, setDevInviteUrl] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
 
   const {
+    control,
     register,
     handleSubmit,
     reset,
@@ -59,20 +61,21 @@ export function StaffInvitePanel() {
 
   const onSubmit = async (values: StaffInviteValues) => {
     setFormError(null);
-    setNotice(null);
     setDevInviteUrl(null);
     try {
       const created = await invitationApi.create({ email: values.email, role: values.role });
-      setNotice(
-        created.delivered
-          ? `Invitation sent to ${created.email}.`
-          : `Invitation created for ${created.email}, but the email could not be delivered. Ask them to request a new one.`,
-      );
+      if (created.delivered) {
+        toast.success(`Invitation sent to ${created.email}.`);
+      } else {
+        toast.error(
+          `Invitation created for ${created.email}, but the email could not be delivered.`,
+        );
+      }
       if (created.devInviteUrl) setDevInviteUrl(created.devInviteUrl);
       reset({ email: '', role: values.role });
       await loadInvitations();
     } catch (error) {
-      setFormError(
+      toast.error(
         error instanceof ApiError
           ? error.message
           : 'We could not send the invitation. Check your connection and try again.',
@@ -85,9 +88,12 @@ export function StaffInvitePanel() {
     setFormError(null);
     try {
       await invitationApi.revoke(id);
+      toast.success('Invitation revoked.');
       await loadInvitations();
     } catch (error) {
-      if (error instanceof ApiError) setFormError(error.message);
+      toast.error(
+        error instanceof ApiError ? error.message : 'We could not revoke that invitation.',
+      );
     } finally {
       setRevokingId(null);
     }
@@ -109,15 +115,24 @@ export function StaffInvitePanel() {
           {...register('email')}
         />
 
-        <SelectField
-          label="Role"
-          options={ROLE_OPTIONS}
-          error={errors.role?.message}
-          {...register('role')}
+        <Controller
+          control={control}
+          name="role"
+          render={({ field }) => (
+            <SearchableSelect
+              label="Role"
+              value={field.value ?? ''}
+              onChange={field.onChange}
+              options={ROLE_OPTIONS}
+              placeholder="Select a role"
+              searchPlaceholder="Search roles…"
+              emptyMessage="No role matches that search."
+              error={errors.role?.message}
+            />
+          )}
         />
 
         <AuthErrorMessage>{formError}</AuthErrorMessage>
-        {notice ? <AuthSuccessMessage>{notice}</AuthSuccessMessage> : null}
         {devInviteUrl ? (
           <p className="break-all rounded-md border border-border bg-background p-3 text-xs text-slate">
             Development link (email transport is logging only):{' '}
@@ -133,7 +148,7 @@ export function StaffInvitePanel() {
       <div className="space-y-3">
         <h3 className="text-sm font-semibold text-ink">Pending invitations</h3>
         {isLoading ? (
-          <div className="h-16 animate-pulse rounded-md bg-slate-100" />
+          <SectionLoader label="Loading invitations…" className="py-4" />
         ) : pending.length === 0 ? (
           <p className="text-sm text-slate">
             No one has been invited yet. You can skip this step and invite staff later.
